@@ -1,3 +1,4 @@
+import { ModelSettings } from "./settings/models.mjs";
 import { PRIVACY_DATA } from "./privacy-demo.mjs";
 import { id, delay, checkAbort, HarnessError } from "./core.mjs";
 import { FIXED_CART } from "./fixtures.mjs";
@@ -11,7 +12,7 @@ const step = (text, ...calls) => ({ text, calls });
 const load = (name) => call("tool_load", { name });
 
 export class ModelRegistry {
-  constructor(env = process.env) {
+  constructor(env = process.env, settingsRoot) {
     const window = Number(env.LLM_CONTEXT_WINDOW || 32768),
       output = Number(env.LLM_MAX_OUTPUT || 2048);
     this.profiles = [
@@ -54,6 +55,14 @@ export class ModelRegistry {
     this.baseUrl = (env.LLM_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
     this.key = env.LLM_API_KEY || "";
     this.effort = env.LLM_REASONING_EFFORT || "";
+    if (settingsRoot) {
+      const builtins = [...this.profiles];
+      this.settings = new ModelSettings(settingsRoot, () => {
+        this.profiles = [...builtins, ...this.settings.profiles()];
+        this.onChange?.();
+      });
+      this.profiles = [...builtins, ...this.settings.profiles()];
+    }
   }
   list() {
     return this.profiles.map(({ modelName: _modelName, ...p }) => p);
@@ -74,7 +83,13 @@ export class ModelRegistry {
       profile.maxOutput >= profile.contextWindow
     )
       throw new HarnessError("MODEL_CONFIG", "模型上下文或输出预算配置无效");
-    return profile;
+    const pinned = { ...profile };
+    Object.defineProperty(pinned, "connection", {
+      value: profile.providerId
+        ? this.settings.connection(profile.providerId)
+        : { baseUrl: this.baseUrl, key: this.key, effort: this.effort },
+    });
+    return pinned;
   }
 }
 
@@ -84,6 +99,12 @@ export class DemoModel {
     this.speed = speed;
   }
   plan(session, agent) {
+    if (session.workspaceId && !agent.parentId)
+      return [
+        step(
+          "当前选择的是模拟模型。模拟模型不会修改你的真实工作区；请在模型设置中配置 API，并切换到真实模型后继续任务。",
+        ),
+      ];
     if (agent.parentId && !agent.delegation?.materials.some((m) => m.path === "cart.test.mjs"))
       return [
         step("模拟子助手正在查看分配的材料。", call("file_list")),
@@ -328,6 +349,8 @@ export class ApiModel {
   }
   async complete({ agent, input, profile, signal, onDelta }) {
     const protocol = profile.protocol;
+    const connection = profile.connection ?? this.registry;
+    const effort = profile.effort ?? connection.effort ?? this.registry.effort;
     if (!["responses", "chat-completions"].includes(protocol))
       throw new HarnessError("MODEL_PROTOCOL", "LLM_PROTOCOL 只支持 responses 或 chat-completions");
     const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
@@ -338,13 +361,17 @@ export class ApiModel {
         messages: input.messages,
         tools: input.tools,
         stream: true,
-        max_completion_tokens: profile.maxOutput,
+        [profile.maxTokensField ?? "max_completion_tokens"]: profile.maxOutput,
       };
-      if (this.registry.effort) payload.reasoning_effort = this.registry.effort;
+      if (effort) payload.reasoning_effort = effort;
     } else {
       const messages = [];
       for (const unit of agent.history) {
-        if (unit.rawResponse && unit.rawModel === agent.model) {
+        if (
+          unit.rawResponse &&
+          unit.rawModel === agent.model &&
+          (unit.rawConfigVersion ?? "environment") === (profile.configVersion ?? "environment")
+        ) {
           messages.push(...unit.rawResponse);
           for (const message of unit.messages.filter((m) => m.role === "tool"))
             messages.push({
@@ -382,18 +409,19 @@ export class ApiModel {
         store: false,
         include: ["reasoning.encrypted_content"],
       };
-      if (this.registry.effort) payload.reasoning = { effort: this.registry.effort };
+      if (effort) payload.reasoning = { effort };
     }
     const response = await this.fetcher(
-      `${this.registry.baseUrl}/${protocol === "responses" ? "responses" : "chat/completions"}`,
+      `${connection.baseUrl}/${protocol === "responses" ? "responses" : "chat/completions"}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${this.registry.key}`,
+          Authorization: `Bearer ${connection.key}`,
         },
         body: JSON.stringify(payload),
         signal: requestSignal,
+        redirect: "error",
       },
     );
     if (!response.ok) {
@@ -475,6 +503,12 @@ export class ApiModel {
         throw new HarnessError("INVALID_ARGUMENT", "模型工具参数不是完整 JSON");
       }
     }
-    return { text, calls, rawResponse, simulated: false };
+    return {
+      text,
+      calls,
+      rawResponse,
+      configVersion: profile.configVersion ?? "environment",
+      simulated: false,
+    };
   }
 }

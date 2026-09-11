@@ -1,3 +1,4 @@
+import { WORKSPACE_TOOLS } from "./workspace-tools.mjs";
 import { configuredCommands } from "./command-tools.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -32,6 +33,7 @@ const tool = (name, title, description, parameters, extra = {}) => ({
 });
 
 export const CORE_TOOLS = [
+  ...WORKSPACE_TOOLS,
   tool(
     "catalog_browse",
     "打开分类目录",

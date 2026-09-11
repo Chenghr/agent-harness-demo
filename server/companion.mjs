@@ -247,7 +247,11 @@ export class Companion {
     return { cancelled: true };
   }
   feedback(sid, { kind, target, reason = "" } = {}) {
-    if (!["up", "down", "egg"].includes(kind) || typeof reason !== "string" || reason.length > 1000)
+    if (
+      !["up", "down", "egg", "slow"].includes(kind) ||
+      typeof reason !== "string" ||
+      reason.length > 1000
+    )
       throw new HarnessError("INVALID_ARGUMENT", "反馈格式无效");
     if (
       !target ||
@@ -298,8 +302,24 @@ export class Companion {
       epoch: s.agents.main.epoch,
       status: s.status,
       source: "user-reaction",
+      elapsedMs: Date.now() - Date.parse(s.createdAt),
+      currentAction: this.progress(sid).latest,
+      count: 1,
       interpretation: "软标签，不代表质量真值",
     };
+    const last = data.feedback.at(-1);
+    if (
+      last &&
+      last.kind === kind &&
+      last.target.type === target.type &&
+      last.target.id === target.id &&
+      Date.now() - Date.parse(last.lastAt ?? last.time) < 1500
+    ) {
+      last.count = (last.count ?? 1) + 1;
+      last.lastAt = now();
+      this.save(sid, data);
+      return last;
+    }
     data.feedback.push(feedback);
     this.save(sid, data);
     return feedback;

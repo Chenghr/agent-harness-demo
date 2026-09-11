@@ -43,10 +43,15 @@ export class CompletionChecks {
   }
 
   version(s, a) {
-    const workspace = a.parentId ? path.join(s.workspace, "agents", a.id) : s.workspace;
+    const workspace = this.harness.workspace(s, a);
     const hash = createHash("sha256");
     // Hash the actual top-level task files too, so an external edit invalidates an old review.
-    if (fs.existsSync(workspace))
+    if (s.workspaceId && !a.parentId) {
+      for (const file of this.harness.workspaces.files(s.workspaceId)) {
+        hash.update(file);
+        hash.update(fs.readFileSync(safePath(workspace, file)));
+      }
+    } else if (fs.existsSync(workspace))
       for (const name of fs.readdirSync(workspace).sort()) {
         const file = path.join(workspace, name),
           stat = fs.lstatSync(file);

@@ -1,3 +1,6 @@
+import { WorkspaceManager } from "./workspaces.mjs";
+import { PermissionService, PERMISSION_MODES } from "./permissions.mjs";
+import { executeWorkspaceTool } from "./workspace-tools.mjs";
 import { Companion } from "./companion.mjs";
 import { searchHistory } from "./context/history.mjs";
 import { executeCommand } from "./command-tools.mjs";
@@ -54,7 +57,11 @@ export class Harness extends EventEmitter {
     super();
     this.store = new Store(root);
     this.catalog = new Catalog(path.join(this.store.root, "catalog"));
-    this.models = new ModelRegistry(env);
+    this.models = new ModelRegistry(env, path.join(this.store.root, "settings"));
+    this.workspaces = new WorkspaceManager(path.join(this.store.root, "user-workspaces"), {
+      protectedRoots: [this.store.root],
+    });
+    this.permissions = new PermissionService(this);
     this.agentDefinitions = new AgentDefinitionRegistry(agentDefinitionsDir, {
       tools: [...this.catalog.tools.keys()],
       skills: [...this.catalog.skills.keys()],
@@ -68,6 +75,7 @@ export class Harness extends EventEmitter {
         models: this.models.profiles.map((m) => m.id),
       });
     };
+    this.models.onChange = () => this.catalog.library.onChange();
     this.subagentWorkspace = new SubagentWorkspace(this);
     this.supervisors = new Map();
     this.demo = modelAdapter || new DemoModel(speed);
@@ -109,6 +117,7 @@ export class Harness extends EventEmitter {
         for (const a of s.approvals) if (a.status === "pending") a.status = "cancelled";
       }
       this.sessions.set(s.id, s);
+      if (s.workspaceId) this.finishWorkspace(s);
       this.store.save(s);
     }
   }
@@ -118,6 +127,8 @@ export class Harness extends EventEmitter {
       models: this.models.list(),
       counts: this.catalog.counts(),
       scenarios: SCENARIOS,
+      workspaces: this.workspaces.list(),
+      permissionModes: PERMISSION_MODES,
       assistants: this.agentDefinitions.list(),
       limits: {
         maxCalls: this.maxCalls,
@@ -184,9 +195,22 @@ export class Harness extends EventEmitter {
     session.agents[a.id] = a;
     return a;
   }
-  create({ prompt, scenario = "full", model = "demo-balanced", autoStart = true } = {}) {
+  create({
+    prompt,
+    scenario = "full",
+    model = "demo-balanced",
+    autoStart = true,
+    workspaceId,
+    permissionMode = "ask",
+  } = {}) {
     if (this.shuttingDown) throw new HarnessError("CLOSING", "服务正在关闭");
     this.models.get(model);
+    if (!PERMISSION_MODES.includes(permissionMode))
+      throw new HarnessError("INVALID_ARGUMENT", "未知权限模式");
+    if (workspaceId) {
+      this.workspaces.get(workspaceId);
+      scenario = "workspace";
+    } else permissionMode = "ask";
     const selected = SCENARIOS.find((s) => s.id === scenario);
     prompt = String(prompt || selected?.prompt || "请分析购物车测试失败的原因。").trim();
     if (!prompt || prompt.length > 10000)
@@ -202,6 +226,8 @@ export class Harness extends EventEmitter {
       mainAgentId: "main",
       revision: 1,
       workspaceRevision: 0,
+      workspaceId,
+      permissionMode,
       closing: false,
       readOnly: /先不要修改|只分析|只读|不要修改文件|不要修改实现|只给分析|也先不要修改/.test(
         prompt,
@@ -218,7 +244,9 @@ export class Harness extends EventEmitter {
       stats: { toolCalls: 0, succeeded: 0, failed: 0, cancelled: 0, fixtureCalls: 0 },
       restartUnverified: false,
     };
-    session.workspace = createWorkspace(this.store.root, session.id, scenario);
+    session.workspace = workspaceId
+      ? this.workspaces.get(workspaceId).path
+      : createWorkspace(this.store.root, session.id, scenario);
     session.acceptance = this.completionChecks.configure(session);
     this.sessions.set(session.id, session);
     const a = this.agent(session, { goal: prompt, model });
@@ -289,6 +317,9 @@ export class Harness extends EventEmitter {
       closing: s.closing,
       revision: s.revision,
       workspaceRevision: s.workspaceRevision,
+      workspaceId: s.workspaceId,
+      workspace: s.workspace,
+      permissionMode: s.permissionMode ?? "ask",
       readOnly: s.readOnly,
       acceptance: s.acceptance,
       agents,
@@ -313,6 +344,7 @@ export class Harness extends EventEmitter {
         title: s.title,
         status: s.status,
         model: s.model,
+        workspaceId: s.workspaceId,
         updatedAt: s.updatedAt,
       }));
   }
@@ -349,7 +381,47 @@ export class Harness extends EventEmitter {
   setStatus(s, a, status) {
     this.controller(s, a).setStatus(status);
   }
+  beginWorkspace(s) {
+    if (s.workspaceId) this.workspaces.begin(s.workspaceId, s.id, s.userRequirements.at(-1), true);
+  }
+  finishWorkspace(s) {
+    if (!s.workspaceId) return;
+    try {
+      this.workspaces.finish(s.workspaceId, s.id, s.status);
+    } catch (error) {
+      s.status = "interrupted";
+      s.checkpointError = error.message;
+      this.event(s, "workspace.checkpoint_failed", { message: error.message });
+    }
+  }
+  rollbackWorkspace(sid, roundId) {
+    const s = this.get(sid);
+    if (!s.workspaceId) throw new HarnessError("INVALID_ARGUMENT", "此任务不是用户工作区");
+    if (this.controller(s, s.agents.main).running || this.processes.list(sid).length)
+      throw new HarnessError("WORKSPACE_BUSY", "请先停止任务并等待资源回收");
+    const result = this.workspaces.rollback(s.workspaceId, sid, roundId);
+    s.workspaceRevision++;
+    s.revision++;
+    s.status = "idle";
+    s.closing = true;
+    s.agents.main.completion = undefined;
+    s.agents.main.result = null;
+    s.agents.main.status = "idle";
+    s.agents.main.history = [];
+    s.agents.main.summary = "";
+    this.context.add(s, s.agents.main, [
+      {
+        role: "user",
+        content: `文件已撤销一轮修改（${roundId}）。旧验证结果已失效，后续任务必须重新读取文件。原任务要求：${s.userRequirements.join("\n")}`,
+      },
+    ]);
+    this.chat(s, "system", "已撤销所选一轮的文件修改。保留对话记录，旧验证结果已失效。");
+    this.event(s, "workspace.rolled_back", result);
+    this.store.save(s);
+    return result;
+  }
   launch(s, a) {
+    if (!a.parentId) this.beginWorkspace(s);
     return this.controller(s, a).start();
   }
   async invoke(
@@ -403,13 +475,21 @@ export class Harness extends EventEmitter {
       validateTool(definition.parameters, args);
       if (!definition.always && !a.loadedTools.includes(name))
         throw new HarnessError("TOOL_NOT_LOADED", `先通过 tool_load 加载 ${name}`);
-      if (name === "file_write") await this.authorize(s, a, action, signal);
+      if (
+        s.workspaceId &&
+        !a.parentId &&
+        ["file_read", "file_write", "file_edit", "file_delete", "shell_run"].includes(name)
+      ) {
+        this.beginWorkspace(s);
+        await this.permissions.authorize(s, a, action, signal);
+      } else if (name === "file_write") await this.authorize(s, a, action, signal);
       this.valid(s, a, epoch, signal);
       action.status = "running";
       this.event(s, "tool.started", { tool: name, args, callId }, a.id);
       const execute = () => this.execute(s, a, name, args, signal, epoch, action);
       const result =
-        ["run_tests", "run_diagnostic"].includes(name) || definition.adapter === "node-command-v1"
+        ["run_tests", "run_diagnostic", "shell_run"].includes(name) ||
+        definition.adapter === "node-command-v1"
           ? await this.toolSlots.run(execute, signal)
           : await execute();
       action.status = "succeeded";
@@ -518,6 +598,8 @@ export class Harness extends EventEmitter {
       pending.reject(abortError());
       throw new HarnessError("STALE_APPROVAL", "任务已经改变，旧批准不能继续执行");
     }
+    if (approval.scope === "once" && decision === "task")
+      throw new HarnessError("INVALID_ARGUMENT", "此操作只支持单次批准");
     approval.status = decision === "deny" ? "denied" : "approved";
     if (decision === "task")
       s.grants.push({
@@ -560,11 +642,36 @@ export class Harness extends EventEmitter {
     return artifact;
   }
   workspace(s, a) {
-    return a.parentId ? path.join(s.workspace, "agents", a.id) : s.workspace;
+    return a.parentId
+      ? s.workspaceId
+        ? path.join(this.store.root, "agent-workspaces", s.id, a.id)
+        : path.join(s.workspace, "agents", a.id)
+      : s.workspace;
   }
   async execute(s, a, name, args, signal, epoch, action) {
     this.valid(s, a, epoch, signal);
     const workspace = this.workspace(s, a);
+    if (
+      s.workspaceId &&
+      !a.parentId &&
+      [
+        "file_list",
+        "file_read",
+        "file_write",
+        "file_search",
+        "file_edit",
+        "file_delete",
+        "shell_run",
+      ].includes(name)
+    )
+      return executeWorkspaceTool(this, s, a, name, args, signal, epoch, action);
+    if (["file_search", "file_edit", "file_delete", "shell_run"].includes(name))
+      throw new HarnessError(
+        "POLICY_DENIED",
+        "通用文件和命令工具需要选择用户工作区，且由主助手执行",
+      );
+    if (s.workspaceId && ["run_tests", "run_diagnostic"].includes(name))
+      throw new HarnessError("POLICY_DENIED", "示例执行工具不能用于真实工作区，请使用 shell_run");
     if (name === "catalog_browse")
       return this.catalog.library.browse(args.directory ?? "root", {
         offset: args.offset,
@@ -914,6 +1021,7 @@ export class Harness extends EventEmitter {
     const controller = this.controller(s, a);
     const continuing = !controller.running || controller.isTerminal;
     if (continuing) {
+      this.beginWorkspace(s);
       s.closing = false;
       a.branchClosed = false;
       if (s.scenario === "interrupt" || s.scenario === "scale") s.scenario = "custom";
@@ -959,6 +1067,7 @@ export class Harness extends EventEmitter {
         ? "任务已停止。受管理的本地进程已回收，已完成的操作与原始记录保留。"
         : "任务停止仍有未确认资源，请检查事件记录。",
     );
+    if (!this.processes.list(sid).length) this.finishWorkspace(s);
     this.event(s, "session.stopped", { resources: this.processes.list(sid).length });
     this.store.save(s);
     return this.snapshot(sid);
@@ -1128,7 +1237,10 @@ export class Harness extends EventEmitter {
     for (const supervisor of this.supervisors.values()) supervisor.clear();
     for (const timer of this.saveTimers.values()) clearTimeout(timer);
     this.saveTimers.clear();
-    for (const s of this.sessions.values()) this.store.save(s);
+    for (const s of this.sessions.values()) {
+      if (!this.processes.list(s.id).length) this.finishWorkspace(s);
+      this.store.save(s);
+    }
     this.catalog.library.close();
   }
 }

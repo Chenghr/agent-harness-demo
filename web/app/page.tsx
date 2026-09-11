@@ -1,6 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  RuntimeSettings,
+  WorkspaceChooser,
+  type Workspace,
+} from './components/runtime-settings';
+import { WorkspaceChanges } from './components/workspace-changes';
 import { CompanionWidget } from './components/companion';
 import { CompletionReview } from './components/completion-review';
 import type { CompletionRecord } from '../../server/runtime/contracts.ts';
@@ -115,6 +121,8 @@ type Action = {
   duration?: number;
 };
 type Approval = {
+  reason?: string;
+  scope?: string;
   id: string;
   tool: string;
   args: Record<string, unknown>;
@@ -131,6 +139,9 @@ type EventItem = {
   data: Record<string, unknown>;
 };
 type Session = {
+  workspaceId?: string;
+  workspace?: string;
+  permissionMode?: string;
   id: string;
   title: string;
   status: string;
@@ -175,6 +186,7 @@ type CatalogItem = {
   parameters?: unknown;
 };
 type Config = {
+  workspaces?: Workspace[];
   models: Profile[];
   assistants?: {
     name: string;
@@ -320,7 +332,7 @@ function Empty({
 export default function Home() {
   const [config, setConfig] = useState<Config | null>(null);
   const [sessions, setSessions] = useState<
-    { id: string; title: string; status: string }[]
+    { id: string; title: string; status: string; workspaceId?: string }[]
   >([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -335,6 +347,12 @@ export default function Home() {
   const [connected, setConnected] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [permissionMode, setPermissionMode] = useState('ask');
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [fullPermissionOpen, setFullPermissionOpen] = useState(false);
+  const refreshConfig = () =>
+    api<Config>('/config').then(setConfig).catch(fail);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('tool');
   const [catalogPage, setCatalogPage] = useState(0);
@@ -435,6 +453,8 @@ export default function Home() {
     setStreaming('');
     setConnected(false);
     setSelected(id);
+    if (id)
+      setWorkspaceId(sessions.find((s) => s.id === id)?.workspaceId ?? '');
     void api('/companion/focus', { sessionId: id }).catch(fail);
   }
   async function create(scenario = 'full', prompt = draft) {
@@ -442,7 +462,14 @@ export default function Home() {
     setBusy(true);
     setError('');
     try {
-      const s = await api<Session>('/sessions', { model, scenario, prompt });
+      const s = await api<Session>('/sessions', {
+        model,
+        scenario,
+        prompt,
+        workspaceId:
+          scenario === 'custom' ? workspaceId || undefined : undefined,
+        permissionMode,
+      });
       chooseSession(s.id);
       setDraft('');
       await refreshList();
@@ -584,7 +611,7 @@ export default function Home() {
         <SidebarFooter>
           <div className="local-note">
             <ShieldCheck size={16} />
-            <span>本地运行 · 独立示例工作区</span>
+            <span>本地运行 · 文件与对话保存在本机</span>
           </div>
           <Button
             variant="ghost"
@@ -621,6 +648,25 @@ export default function Home() {
           </div>
           <div className="topbar-right">
             <Button
+              className="compact-settings"
+              size="sm"
+              variant="ghost"
+              aria-label="模型设置"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings2 size={16} />
+            </Button>
+            {session?.workspaceId && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setChangesOpen(true)}
+              >
+                <GitBranch size={14} />
+                修改记录
+              </Button>
+            )}
+            <Button
               size="sm"
               variant="ghost"
               onClick={() => setInspectOpen((v) => !v)}
@@ -655,6 +701,30 @@ export default function Home() {
             </Button>
           </div>
         </header>
+        <div className="compact-session-switcher">
+          <select
+            aria-label="切换对话"
+            value={selected ?? ''}
+            onChange={(e) => chooseSession(e.target.value || null)}
+          >
+            <option value="">新建任务</option>
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+          <button onClick={() => setSettingsOpen(true)}>模型与 API</button>
+        </div>
+        <WorkspaceChooser
+          items={config?.workspaces ?? []}
+          value={session ? (session.workspaceId ?? '') : workspaceId}
+          onAdded={refreshConfig}
+          onSelect={(id) => {
+            setWorkspaceId(id);
+            chooseSession(null);
+          }}
+        />
         <div className={`workbench ${inspectOpen ? '' : 'focus-workbench'}`}>
           <section className="conversation" aria-label="对话工作区">
             <div className="conversation-toolbar">
@@ -789,6 +859,7 @@ export default function Home() {
               )}
               {approvals.map((a) => (
                 <div className="approval-card" key={a.id}>
+                  {a.reason && <p>{a.reason}</p>}
                   <div className="approval-heading">
                     <ShieldCheck size={19} />
                     <strong>执行前，请确认这次修改</strong>
@@ -834,15 +905,17 @@ export default function Home() {
                     >
                       拒绝
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        command('approvals/' + a.id, { decision: 'task' })
-                      }
-                    >
-                      允许此助手继续修改此文件
-                    </Button>
+                    {a.scope !== 'once' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          command('approvals/' + a.id, { decision: 'task' })
+                        }
+                      >
+                        允许此助手继续修改此文件
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       onClick={() =>
@@ -908,6 +981,26 @@ export default function Home() {
                   }}
                 />
                 <div className="composer-controls">
+                  <select
+                    className="permission-control"
+                    aria-label="权限模式"
+                    disabled={session ? !session.workspaceId : !workspaceId}
+                    title="选择用户工作区后可配置权限；教学示例保持原有审批"
+                    value={session?.permissionMode ?? permissionMode}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      if (next === 'full') {
+                        setFullPermissionOpen(true);
+                        return;
+                      }
+                      if (selected) void command('permissions', { mode: next });
+                      else setPermissionMode(next);
+                    }}
+                  >
+                    <option value="ask">请求批准</option>
+                    <option value="review">帮我批准</option>
+                    <option value="full">完全访问权限</option>
+                  </select>
                   <Select value={model} onValueChange={changeModel}>
                     <SelectTrigger
                       className="model-select"
@@ -1706,53 +1799,57 @@ export default function Home() {
           <pre>{detail?.body}</pre>
         </DialogContent>
       </Dialog>
+      <Dialog open={fullPermissionOpen} onOpenChange={setFullPermissionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>允许当前对话完全访问？</DialogTitle>
+            <DialogDescription>
+              终端命令可以访问本机文件和网络，操作不再逐次审批。工作区外修改无法通过本应用回滚。只对当前对话或下一次新建任务生效。
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            onClick={() => {
+              if (selected) void command('permissions', { mode: 'full' });
+              else setPermissionMode('full');
+              setFullPermissionOpen(false);
+            }}
+          >
+            允许当前对话完全访问
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setFullPermissionOpen(false)}
+          >
+            取消
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={changesOpen} onOpenChange={setChangesOpen}>
+        <DialogContent className="settings-dialog">
+          <DialogHeader>
+            <DialogTitle>本次对话的修改记录</DialogTitle>
+            <DialogDescription>
+              独立 Git 检查点，不改变项目的分支或暂存区
+            </DialogDescription>
+          </DialogHeader>
+          {selected && (
+            <WorkspaceChanges
+              sessionId={selected}
+              active={!!session && activeStates.includes(session.status)}
+              onChanged={() => {
+                void refreshList();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="settings-dialog">
           <DialogHeader>
             <DialogTitle>模型与运行设置</DialogTitle>
-            <DialogDescription>
-              密钥只由后端环境变量读取，不在网页中存储。
-            </DialogDescription>
+            <DialogDescription>配置 API、模型能力与连接测试</DialogDescription>
           </DialogHeader>
-          <div className="settings-models">
-            {config?.models.map((m) => (
-              <div key={m.id}>
-                <Cpu size={18} />
-                <div>
-                  <strong>{m.label}</strong>
-                  <span>
-                    {m.protocol} · {m.contextWindow.toLocaleString()} tokens
-                  </span>
-                </div>
-                <span className="source-badge">
-                  {m.configured ? '可用' : '待配置'}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p>
-            配置项目根目录的 <code>.env</code>{' '}
-            后重启服务，即可接入真实模型。支持 Responses 与 Chat Completions
-            兼容协议。
-          </p>
-          <div className="settings-note">
-            <ShieldCheck size={18} />
-            <p>
-              当前执行环境管理本地进程和独立示例工作区，属于受控教学环境，未宣称为任意代码的安全沙箱。
-            </p>
-          </div>
-          <div className="settings-counts">
-            {config?.counts.realTools} 个真实本地工具 /{' '}
-            {config?.counts.fixtureTools} 个模拟数据工具
-            <br />
-            {config?.counts.authoredSkills} 个编写的 Skill /{' '}
-            {config?.counts.generatedSkills} 个生成示例
-          </div>
-          {session?.grants.length ? (
-            <Button variant="outline" onClick={() => command('revoke')}>
-              撤销当前任务的持续写入授权
-            </Button>
-          ) : null}
+          <RuntimeSettings onChanged={refreshConfig} />
         </DialogContent>
       </Dialog>
     </SidebarProvider>

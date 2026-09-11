@@ -45,7 +45,7 @@ final class PetApp: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKN
     @objc func quit() { NSApp.terminate(nil) }
     func resize(expanded: Bool) {
         let old = window.frame
-        let size = expanded ? NSSize(width:400,height:740) : NSSize(width:240,height:150)
+        let size = expanded ? NSSize(width:400,height:740) : NSSize(width:280,height:180)
         let visible = window.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
         let x = max(visible.minX,min(old.maxX-size.width,visible.maxX-size.width))
         let y = max(visible.minY,min(old.minY,visible.maxY-size.height))

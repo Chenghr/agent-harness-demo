@@ -1,0 +1,35 @@
+{
+  "tests": {
+    "passed": 145,
+    "failed": 0,
+    "skipped": 0,
+    "report": "usability-tests.txt"
+  },
+  "checks": {
+    "lint": "passed",
+    "runtimeTypecheck": "passed",
+    "frontendTypecheck": "passed",
+    "frontendBuild": "passed",
+    "macOSDesktopCompile": "passed"
+  },
+  "browser": {
+    "providerConfiguration": "passed",
+    "modelConfiguration": "passed",
+    "toolRoundTrip": "passed with local protocol fixture",
+    "workspacePathSelection": "passed",
+    "fileEdit": "passed",
+    "gitBeforeAfter": "passed",
+    "rollback": "passed; NAME restored to PERSON",
+    "petQuickSlowReaction": "passed",
+    "narrowWindowNavigation": "passed"
+  },
+  "limits": [
+    "No user API key used; real supplier and model quality not validated",
+    "Credentials are local mode-0600 files, not encrypted or in Keychain",
+    "Restricted shell execution implemented and tested on macOS only",
+    "Rollback covers recorded workspace files; ignored/external files and remote side effects are excluded",
+    "One active conversation per overlapping workspace",
+    "Native pet compiled; new native window geometry not manually revalidated in this round"
+  ],
+  "workbench": "http://127.0.0.1:4317/"
+}

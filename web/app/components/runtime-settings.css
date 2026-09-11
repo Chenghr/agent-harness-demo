@@ -1,0 +1,205 @@
+.runtime-settings {
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 13px;
+  padding: 0 4px;
+}
+.runtime-settings form {
+  padding: 18px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+.runtime-hint {
+  color: #737373;
+  font-size: 12px;
+  line-height: 1.65;
+}
+.runtime-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+.runtime-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.runtime-fields .wide {
+  grid-column: 1/-1;
+}
+.runtime-settings input,
+.runtime-settings select,
+.workspace-control select,
+.workspace-add input,
+.permission-control {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  padding: 7px 9px;
+  color: #262626;
+  min-width: 0;
+}
+.runtime-settings button,
+.workspace-control button,
+.workspace-changes button {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+.runtime-settings button:disabled,
+.workspace-control button:disabled,
+.workspace-changes button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.runtime-section-title,
+.runtime-model-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.runtime-model-row {
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+.runtime-model-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.runtime-model-row small,
+.workspace-changes small {
+  display: block;
+  color: #737373;
+}
+.runtime-actions {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.runtime-error {
+  color: #b42318;
+  background: #fff3f0;
+  padding: 8px;
+  border-radius: 6px;
+}
+.runtime-provider-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.runtime-provider-list button {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.runtime-provider-list span {
+  font-size: 11px;
+  color: #737373;
+}
+.workspace-control {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  position: relative;
+  padding: 10px 24px;
+  border-bottom: 1px solid #eee;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+.workspace-control > span {
+  color: #737373;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+}
+.workspace-add {
+  position: absolute;
+  top: 100%;
+  left: 24px;
+  background: white;
+  padding: 18px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #0001;
+  z-index: 40;
+  width: min(420px, 90vw);
+}
+.workspace-add input {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+}
+.workspace-add small {
+  color: #737373;
+}
+.permission-control {
+  font-size: 12px;
+  max-width: 150px;
+}
+.workspace-changes {
+  max-height: 72vh;
+  overflow: auto;
+  font-size: 13px;
+}
+.workspace-changes article {
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+.workspace-changes summary {
+  padding: 12px 0;
+  cursor: pointer;
+}
+.change-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.change-columns pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f8f8f8;
+  padding: 12px;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 11px;
+}
+.settings-dialog {
+  max-width: 720px !important;
+}
+@media (max-width: 650px) {
+  .runtime-fields,
+  .change-columns {
+    grid-template-columns: 1fr;
+  }
+  .workspace-control {
+    padding: 8px 14px;
+  }
+  .workspace-control > span {
+    display: none;
+  }
+  .permission-control {
+    max-width: 120px;
+  }
+}
+.runtime-settings > output,
+.runtime-settings > .runtime-error {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: block;
+  background: #f8faf8;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 8px 0;
+}
+.runtime-settings > .runtime-error {
+  background: #fff3f0;
+}

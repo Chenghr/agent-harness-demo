@@ -21,7 +21,7 @@ export class SubagentWorkspace {
     for (const value of request.files ?? []) {
       const relative = relativePath(value);
       assertRead(parent, relative);
-      const file = workspacePath(source, parent, relative);
+      const file = s.workspaceId && !parent.parentId ? h.permissions.path(s, parent, relative).file : workspacePath(source, parent, relative);
       if (!fs.existsSync(file) || !fs.statSync(file).isFile())
         throw new HarnessError("NOT_FOUND", `输入文件不存在：${relative}`);
       if (fs.statSync(file).size > 2_000_000)

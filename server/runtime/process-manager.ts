@@ -15,6 +15,7 @@ interface Options {
   agentId: string;
   cwd: string;
   args: string[];
+  executable?: string;
   signal?: AbortSignal;
   timeout?: number;
   outputLimit?: number;
@@ -39,12 +40,13 @@ export class ProcessManager {
     agentId,
     cwd,
     args,
+    executable = process.execPath,
     signal,
     timeout = 15000,
     outputLimit = 200000,
   }: Options) {
     if (signal?.aborted) throw fault("CANCELLED", "操作已取消");
-    const child = spawn(process.execPath, args, {
+    const child = spawn(executable, args, {
       cwd,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],

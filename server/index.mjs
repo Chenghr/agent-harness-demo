@@ -1,3 +1,4 @@
+import { settingsRoute } from "./settings/routes.mjs";
 import { capabilityRoute } from "./capability-routes.mjs";
 import { RuntimeFault } from "./runtime/contracts.ts";
 import http from "node:http";
@@ -78,6 +79,8 @@ export function createServer({
             return send(res, 200, harness.companion.focus((await readBody(req)).sessionId));
         }
         if (method === "GET" && parts[0] === "config") return send(res, 200, harness.config());
+        if (["settings", "workspaces"].includes(parts[0]))
+          return send(res, 200, await settingsRoute(harness, parts, method, () => readBody(req)));
         if (parts[0] === "management")
           return send(
             res,
@@ -115,6 +118,27 @@ export function createServer({
           }
           const sid = parts[1];
           const session = harness.get(sid);
+          if (parts[2] === "changes") {
+            if (!session.workspaceId) return send(res, 200, []);
+            if (method === "GET")
+              return send(
+                res,
+                200,
+                parts[3]
+                  ? harness.workspaces.detail(session.workspaceId, sid, parts[3])
+                  : harness.workspaces
+                      .history(session.workspaceId, sid)
+                      .map(({ before, after, ...r }) => ({
+                        ...r,
+                        beforeCommit: before.commit,
+                        afterCommit: after?.commit,
+                      })),
+              );
+            if (method === "POST")
+              return send(res, 200, harness.rollbackWorkspace(sid, (await readBody(req)).roundId));
+          }
+          if (parts[2] === "permissions" && method === "POST")
+            return send(res, 200, harness.permissions.set(session, (await readBody(req)).mode));
           if (parts[2] === "companion") {
             if (method === "GET") {
               if (parts[3] === "history")
@@ -223,6 +247,26 @@ export function createServer({
             });
           if (parts[2] === "artifacts" && method === "GET")
             return send(res, 200, harness.store.readArtifact(sid, parts[3]));
+          if (parts[2] === "files" && method === "GET" && session.workspaceId)
+            return send(res, 200, {
+              files: harness.workspaces
+                .files(session.workspaceId)
+                .slice(0, 100)
+                .map((file) => {
+                  const absolute = harness.permissions.path(
+                    session,
+                    session.agents.main,
+                    file,
+                  ).file;
+                  return {
+                    path: file,
+                    content:
+                      fs.statSync(absolute).size <= 20000
+                        ? fs.readFileSync(absolute, "utf8")
+                        : "文件较大，请使用文件工具分段读取",
+                  };
+                }),
+            });
           if (parts[2] === "files" && method === "GET")
             return send(res, 200, {
               files: fs
@@ -370,7 +414,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   });
   app.server.listen(port, host, () =>
     console.log(
-      `Harness Lab: http://${host}:${port}\n模拟模式已就绪。数据目录为本地 .harness；真实模型配置只从服务端环境读取。`,
+      `Harness Lab: http://${host}:${port}\n模拟模式已就绪。模型 API 可在网页设置中配置；任务记录和密钥仅保存在本机。`,
     ),
   );
   let closing = false;

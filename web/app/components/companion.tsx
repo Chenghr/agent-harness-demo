@@ -130,7 +130,7 @@ export function PetFace({ mood = 'idle' }: { mood?: string }) {
           strokeLinecap="round"
         />
         {mood === 'egg' && (
-          <g>
+          <g className="pet-egg-splash">
             <path
               d="M70 29 Q98 20 98 41 Q108 62 87 65 Q63 66 66 47 Q54 38 70 29"
               fill="#fffdf3"
@@ -160,6 +160,7 @@ function CompanionPanel({
     [error, setError] = useState(''),
     [note, setNote] = useState(''),
     [reaction, setReaction] = useState(''),
+    [reactionTick, setReactionTick] = useState(0),
     [quiet, setQuiet] = useState(false),
     [target, setTarget] = useState('task'),
     [reason, setReason] = useState(''),
@@ -228,17 +229,30 @@ function CompanionPanel({
       if (current === generation.current) setSending(false);
     }
   }
-  async function feedback(kind: string) {
+  async function feedback(kind: string, quick = false) {
+    setReaction(kind);
+    setReactionTick((v) => v + 1);
+    setNote(
+      kind === 'slow'
+        ? '收到，等得有点久了。'
+        : kind === 'egg'
+          ? '收到这颗鸡蛋。'
+          : '收到你的反馈。',
+    );
     if (!sessionId) return;
     let ref: { type: string; id: string } = { type: 'task', id: sessionId };
-    if (target === 'message' && state?.progress.lastMessage)
+    if (!quick && target === 'message' && state?.progress.lastMessage)
       ref = { type: 'message', id: state.progress.lastMessage };
-    if (target === 'action' && state?.progress.latest)
+    if (!quick && target === 'action' && state?.progress.latest)
       ref = { type: 'action', id: state.progress.latest.id };
-    if (target.startsWith('pet:'))
+    if (!quick && target.startsWith('pet:'))
       ref = { type: 'companion', id: target.slice(4) };
     try {
-      await request(sessionId, '/feedback', { kind, target: ref, reason });
+      await request(sessionId, '/feedback', {
+        kind,
+        target: ref,
+        reason: kind === 'slow' ? '太慢了' : quick ? '' : reason,
+      });
       setNote(
         kind === 'egg'
           ? '收到这颗鸡蛋。已记下你对这次表现的反馈。'
@@ -538,6 +552,36 @@ function CompanionPanel({
         </section>
       )}
       <div className="pet-dock">
+        <div className="pet-quick-reactions" aria-label="随手表达心情">
+          <button
+            aria-label="不错，点赞"
+            title="不错"
+            onClick={() => void feedback('up', true)}
+          >
+            👍
+          </button>
+          <button
+            aria-label="不满意，点踩"
+            title="不满意"
+            onClick={() => void feedback('down', true)}
+          >
+            👎
+          </button>
+          <button
+            aria-label="做得不好，扔鸡蛋"
+            title="做得不好"
+            onClick={() => void feedback('egg', true)}
+          >
+            🥚
+          </button>
+          <button
+            aria-label="太慢了"
+            title="太慢了太慢了"
+            onClick={() => void feedback('slow', true)}
+          >
+            🐢
+          </button>
+        </div>
         {standalone && (
           <button
             className="pet-drag"
@@ -555,7 +599,17 @@ function CompanionPanel({
               native('expand');
             }}
           >
-            {error ? '连接已断开' : (state?.progress.label ?? '我在这里')}
+            {reaction === 'slow'
+              ? '收到，等得有点久了'
+              : reaction === 'egg'
+                ? '这颗鸡蛋我收下了'
+                : reaction === 'down'
+                  ? '收到，不满意记下了'
+                  : reaction === 'up'
+                    ? '收到鼓励啦'
+                    : error
+                      ? '连接已断开'
+                      : (state?.progress.label ?? '我在这里')}
           </button>
         )}
         <button
@@ -567,6 +621,7 @@ function CompanionPanel({
           }}
         >
           <PetFace
+            key={reactionTick}
             mood={
               reaction === 'egg'
                 ? 'egg'
@@ -574,7 +629,9 @@ function CompanionPanel({
                   ? 'happy'
                   : reaction === 'down'
                     ? 'failed'
-                    : (state?.progress.status ?? 'idle')
+                    : reaction === 'slow'
+                      ? 'waiting'
+                      : (state?.progress.status ?? 'idle')
             }
           />
         </button>

@@ -55,6 +55,8 @@ export function createTaskController(harness, session, agent) {
         epoch: lease.epoch,
         inputTokens: input.tokens,
         simulated: profile.simulated,
+        configVersion: profile.configVersion ?? "environment",
+        modelName: profile.modelName,
       });
       return harness.modelSlots.run(() => {
         lease.assertActive();
@@ -86,6 +88,7 @@ export function createTaskController(harness, session, agent) {
       if (response.rawResponse) {
         unit.rawResponse = response.rawResponse;
         unit.rawModel = agent.model;
+        unit.rawConfigVersion = response.configVersion;
       }
       if (response.text && !agent.parentId)
         harness.chat(session, "assistant", response.text, agent.model);
@@ -114,6 +117,10 @@ export function createTaskController(harness, session, agent) {
     {
       isScopeOpen,
       admitInput(messages) {
+        if (!agent.parentId && session.workspaceId && messages.some((m) => m.source === "user")) {
+          harness.finishWorkspace(session);
+          harness.beginWorkspace(session);
+        }
         // ContextManager commits this complete batch before publishing context.unit.
         harness.context.add(
           session,
@@ -196,6 +203,8 @@ export function createTaskController(harness, session, agent) {
         );
       },
       released() {
+        if (!agent.parentId && session.closing && !harness.processes.list(session.id).length)
+          harness.finishWorkspace(session);
         if (agent.parentId) harness.supervisor(session).released(agent);
         harness.store.save(session);
         harness.emit("state", session.id);
