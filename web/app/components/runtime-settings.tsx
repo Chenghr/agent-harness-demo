@@ -92,6 +92,31 @@ export function RuntimeSettings({ onChanged }: { onChanged: () => void }) {
       <p className="runtime-hint">
         在本机保存，下一次请求生效。密钥保存后不回传；当前使用仅支持文本和工具调用。
       </p>
+      <div className="runtime-actions">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setProvider({ ...blankProvider, name: 'DeepSeek 官方' });
+            setModel({
+              ...blankModel,
+              modelName: 'deepseek-flash',
+              label: 'DeepSeek · Flash',
+              contextWindow: 1000000,
+              maxOutput: 8192,
+              reasoningEfforts: ['none', 'low', 'high', 'max'],
+              effort: 'none',
+            });
+            setDiscovered([]);
+            setError('');
+            setNote(
+              '已填入 DeepSeek 配置。先填写密钥并保存服务，再保存模型、测试调用。默认关闭思考，便于先验证简单任务；可改为 low / high / max。',
+            );
+          }}
+        >
+          DeepSeek 官方预设
+        </button>
+      </div>
       {error && (
         <p role="alert" className="runtime-error">
           {error}
@@ -187,6 +212,7 @@ export function RuntimeSettings({ onChanged }: { onChanged: () => void }) {
           void run(async () => {
             const saved = await runtimeApi<Model>('/settings/models', {
               ...model,
+              reasoningEfforts: model.reasoningEfforts.filter(Boolean),
               id: model.id || undefined,
             });
             setModel(saved);
@@ -290,15 +316,13 @@ export function RuntimeSettings({ onChanged }: { onChanged: () => void }) {
           <label>
             支持的思考等级
             <input
-              key={model.id || 'new-model'}
-              defaultValue={model.reasoningEfforts.join(',')}
+              value={model.reasoningEfforts.join(',')}
               onChange={(e) =>
                 setModel({
                   ...model,
                   reasoningEfforts: e.target.value
                     .split(',')
-                    .map((x) => x.trim())
-                    .filter(Boolean),
+                    .map((x) => x.trim()),
                   effort: '',
                 })
               }
@@ -312,14 +336,18 @@ export function RuntimeSettings({ onChanged }: { onChanged: () => void }) {
               onChange={(e) => setModel({ ...model, effort: e.target.value })}
             >
               <option value="">使用服务默认</option>
-              {model.reasoningEfforts.map((v) => (
-                <option key={v}>{v}</option>
+              {model.reasoningEfforts.filter(Boolean).map((v) => (
+                <option key={v} value={v}>
+                  {v === 'none' ? '关闭思考（none）' : v}
+                </option>
               ))}
             </select>
           </label>
         </div>
         <p className="runtime-hint">
           以上能力来自你的配置，获取模型列表不会验证上下文上限。请按服务文档填写；本应用要求模型支持工具调用。
+          DeepSeek 预设按官方 1M 上下文填写输入预算，单次输出先限制为
+          8192。测试调用会完成一次工具往返，最多等待两分钟。
         </p>
         <div className="runtime-actions">
           <button disabled={busy || !model.providerId}>保存模型</button>

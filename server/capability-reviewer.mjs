@@ -11,7 +11,7 @@ import { estimateTokens } from "./context.mjs";
 export function managementReviewer(h) {
   return async ({ kind, model, item, files, signal }) => {
     const profile = h.models.get(model);
-    if (!model.startsWith("api-"))
+    if (profile.simulated)
       throw new HarnessError(
         "INVALID_ARGUMENT",
         "独立评估只接受已配置的真实模型；教学模型不生成评分",

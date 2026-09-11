@@ -110,7 +110,7 @@ export async function capabilityRoute({ harness: h, parts, method, url, read }) 
     if (command === "evaluate") {
       if (body.model) {
         const profile = h.models.get(body.model);
-        if (!profile.id.startsWith("api-"))
+        if (profile.simulated)
           throw new HarnessError("INVALID_ARGUMENT", "请选择真实模型；模拟模型不生成评分");
       }
       return h.evaluations.start(body.ids, body.kind, body.model || undefined);

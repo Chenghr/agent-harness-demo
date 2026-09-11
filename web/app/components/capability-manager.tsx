@@ -73,7 +73,7 @@ export function CapabilityManager() {
   useEffect(() => {
     request<{ models: Model[] }>('/config')
       .then((data) =>
-        setModels(data.models.filter((m) => m.id.startsWith('api-'))),
+        setModels(data.models.filter((m) => !m.simulated && m.configured)),
       )
       .catch((e) => setError(e.message));
   }, []);

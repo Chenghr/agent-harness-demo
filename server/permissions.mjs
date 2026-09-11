@@ -3,6 +3,7 @@ import path from "node:path";
 import { HarnessError, id, deferred, now } from "./core.mjs";
 import { excludedPath } from "./workspaces.mjs";
 import { assertNoPhotoPath } from "./privacy-policy.mjs";
+import { withModelOptions } from "./model-history.mjs";
 export const PERMISSION_MODES = ["ask", "review", "full"];
 const deny = (message) => {
   throw new HarnessError("POLICY_DENIED", message);
@@ -67,7 +68,7 @@ export class PermissionService {
     try {
       const profile = this.h.models.get(s.model);
       if (profile.simulated) return { decision: "ask", reason: "自动审查需要已配置的真实模型" };
-      const p = { ...profile, maxOutput: Math.min(profile.maxOutput, 800) };
+      const p = withModelOptions(profile, { maxOutput: Math.min(profile.maxOutput, 800) });
       Object.defineProperty(p, "connection", { value: profile.connection });
       const messages = [
         {

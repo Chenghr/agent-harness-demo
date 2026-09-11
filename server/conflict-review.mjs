@@ -9,8 +9,7 @@ export async function compareImport(h, id, model) {
     throw new HarnessError("INVALID_ARGUMENT", "请先选择待处理导入");
   if (h.managementReviews.has(id)) throw new HarnessError("INVALID_ARGUMENT", "此导入正在比较");
   const profile = h.models.get(model);
-  if (!model.startsWith("api-"))
-    throw new HarnessError("INVALID_ARGUMENT", "语义比较需要配置真实模型");
+  if (profile.simulated) throw new HarnessError("INVALID_ARGUMENT", "语义比较需要配置真实模型");
   const candidates = pending.conflicts
     .filter((c) => ["similar", "name", "update", "contradiction"].includes(c.type))
     .slice(0, 8)

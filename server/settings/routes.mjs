@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { HarnessError } from "../core.mjs";
+import { modelExchange } from "../model-history.mjs";
 export async function settingsRoute(h, parts, method, read) {
   const [area, resource, identifier, action] = parts;
   if (area === "workspaces") {
@@ -67,7 +68,7 @@ export async function settingsRoute(h, parts, method, read) {
         { role: "user", content: "开始连接测试" },
       ];
       const agent = { model: profile.id, history: [{ messages: [messages[1]] }] };
-      const signal = AbortSignal.timeout(30000),
+      const signal = AbortSignal.timeout(120000),
         start = Date.now();
       const result = await h.apiModel.complete({
         agent,
@@ -86,19 +87,14 @@ export async function settingsRoute(h, parts, method, read) {
           "MODEL_PROTOCOL",
           "模型能响应，但工具调用测试未通过；请检查工具能力和协议",
         );
-      const exchange = [
-        { role: "assistant", content: result.text || null, tool_calls: result.calls },
-        { role: "tool", tool_call_id: call.id, content: '{"ok":true}' },
-      ];
-      agent.history.push({
-        messages: exchange,
-        rawResponse: result.rawResponse,
-        rawModel: agent.model,
-      });
+      const exchange = modelExchange(result, agent.model);
+      exchange.messages.push({ role: "tool", tool_call_id: call.id, content: '{"ok":true}' });
+      exchange.complete = true;
+      agent.history.push(exchange);
       const answer = await h.apiModel.complete({
         agent,
         profile,
-        input: { messages: [...messages, ...exchange], tools: [tool] },
+        input: { messages: [...messages, ...exchange.messages], tools: [tool] },
         signal,
         onDelta: () => {},
       });

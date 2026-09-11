@@ -36,6 +36,7 @@ import {
 import { Catalog } from "./catalog.mjs";
 import { ContextManager } from "./context.mjs";
 import { ModelRegistry, DemoModel, ApiModel } from "./models.mjs";
+import { withoutProviderState } from "./model-history.mjs";
 import { createWorkspace, SCENARIOS } from "./fixtures.mjs";
 import { createTaskController } from "./runtime-adapter.mjs";
 import { terminalStatuses as terminal } from "./runtime/contracts.ts";
@@ -1199,7 +1200,7 @@ export class Harness extends EventEmitter {
             { role: "user", content: "[模型交接] 已完成操作不得重复执行；继续遵守现有要求。" },
           ],
         },
-        ...a.history.map(({ rawResponse: _raw, rawModel: _model, ...unit }) => unit),
+        ...a.history.map(withoutProviderState),
       ],
     };
     let input = this.context.build(s, candidate, target);

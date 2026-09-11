@@ -37,6 +37,7 @@ export type Model = {
   id: string;
   label: string;
   configured?: boolean;
+  simulated?: boolean;
   available?: boolean;
 };
 export async function request<T>(route: string, body?: unknown): Promise<T> {

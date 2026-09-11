@@ -1,6 +1,7 @@
 import { AgentLoop } from "./runtime/agent-loop.ts";
 import { TaskController } from "./runtime/task-controller.ts";
 import { delay, id } from "./core.mjs";
+import { modelExchange } from "./model-history.mjs";
 
 /** Compatibility adapter: the typed core never imports Harness, storage, or demo models. */
 export function createTaskController(harness, session, agent) {
@@ -73,24 +74,9 @@ export function createTaskController(harness, session, agent) {
     },
     openExchange(response) {
       event("model.finished", { model: agent.model, epoch: agent.epoch });
-      const calls = response.calls ?? [];
-      const unit = harness.context.add(
-        session,
-        agent,
-        [
-          {
-            role: "assistant",
-            content: response.text || null,
-            ...(calls.length ? { tool_calls: calls } : {}),
-          },
-        ],
-        calls.length === 0,
-      );
-      if (response.rawResponse) {
-        unit.rawResponse = response.rawResponse;
-        unit.rawModel = agent.model;
-        unit.rawConfigVersion = response.configVersion;
-      }
+      const exchange = modelExchange(response, agent.model);
+      const unit = harness.context.add(session, agent, exchange.messages, exchange.complete);
+      Object.assign(unit, exchange);
       if (response.text && !agent.parentId)
         harness.chat(session, "assistant", response.text, agent.model);
       return unit;

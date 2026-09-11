@@ -3,6 +3,7 @@ import path from "node:path";
 import { HarnessError, id, now, Semaphore, checkAbort } from "./core.mjs";
 import { searchHistory } from "./context/history.mjs";
 import { contextBudget, estimateTokens } from "./context/budget.mjs";
+import { modelExchange } from "./model-history.mjs";
 const labels = {
   idle: "等待开始",
   thinking: "正在思考",
@@ -173,7 +174,10 @@ export class Companion {
           ],
           tools: turn < 3 ? [historyTool] : [],
         };
-        if (estimateTokens(JSON.stringify(input)) > budget.available)
+        const continuationTokens = estimateTokens(
+          JSON.stringify(agent.history.map((u) => u.rawResponse ?? [])),
+        );
+        if (estimateTokens(JSON.stringify(input)) + continuationTokens > budget.available)
           throw new HarnessError(
             "CONTEXT_LIMIT",
             "宠物的独立对话超过当前模型窗口，请缩小问题或清空宠物对话",
@@ -193,9 +197,8 @@ export class Companion {
         if (turn === 3)
           throw new HarnessError("COMPANION_LIMIT", "只读检索已达本轮上限，请缩小问题");
         if (result.calls.length > 4) throw new HarnessError("COMPANION_LIMIT", "单步检索数量过多");
-        const messages = [
-          { role: "assistant", content: result.text || null, tool_calls: result.calls },
-        ];
+        const exchange = modelExchange(result, agent.model);
+        const messages = exchange.messages;
         for (const call of result.calls) {
           let value;
           try {
@@ -211,7 +214,8 @@ export class Companion {
           }
           messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(value) });
         }
-        agent.history.push({ complete: true, messages });
+        exchange.complete = true;
+        agent.history.push(exchange);
       }
     }
     checkAbort(signal);

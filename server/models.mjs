@@ -2,6 +2,7 @@ import { ModelSettings } from "./settings/models.mjs";
 import { PRIVACY_DATA } from "./privacy-demo.mjs";
 import { id, delay, checkAbort, HarnessError } from "./core.mjs";
 import { FIXED_CART } from "./fixtures.mjs";
+import { chatMessages, responseItems } from "./model-history.mjs";
 
 const call = (name, args = {}) => ({
   id: id("call"),
@@ -49,6 +50,7 @@ export class ModelRegistry {
           key === "api-secondary" ? Number(env.LLM_CONTEXT_WINDOW_ALT || window) : window,
         maxOutput: key === "api-secondary" ? Number(env.LLM_MAX_OUTPUT_ALT || output) : output,
         protocol: env.LLM_PROTOCOL || "responses",
+        maxTokensField: env.LLM_MAX_TOKENS_FIELD || undefined,
         tools: true,
       })),
     ];
@@ -73,7 +75,7 @@ export class ModelRegistry {
     if (!profile.configured)
       throw new HarnessError(
         "MODEL_UNCONFIGURED",
-        "真实模型尚未配置，请设置服务端 .env 并重启；不会自动回退到模拟模型",
+        "真实模型尚未配置，请在网页模型设置中保存服务密钥和模型信息；不会自动回退到模拟模型",
       );
     if (
       !Number.isFinite(profile.contextWindow) ||
@@ -351,6 +353,7 @@ export class ApiModel {
     const protocol = profile.protocol;
     const connection = profile.connection ?? this.registry;
     const effort = profile.effort ?? connection.effort ?? this.registry.effort;
+    const deepseek = new URL(connection.baseUrl).hostname === "api.deepseek.com";
     if (!["responses", "chat-completions"].includes(protocol))
       throw new HarnessError("MODEL_PROTOCOL", "LLM_PROTOCOL 只支持 responses 或 chat-completions");
     const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
@@ -358,56 +361,26 @@ export class ApiModel {
     if (protocol === "chat-completions") {
       payload = {
         model: profile.modelName,
-        messages: input.messages,
+        messages: chatMessages(agent, input, profile, deepseek),
         tools: input.tools,
         stream: true,
-        [profile.maxTokensField ?? "max_completion_tokens"]: profile.maxOutput,
+        [profile.maxTokensField ?? (deepseek ? "max_tokens" : "max_completion_tokens")]:
+          profile.maxOutput,
       };
-      if (effort) payload.reasoning_effort = effort;
+      if (deepseek && effort) {
+        payload.thinking = { type: effort === "none" ? "disabled" : "enabled" };
+        if (effort !== "none") payload.reasoning_effort = effort;
+      } else if (effort) payload.reasoning_effort = effort;
     } else {
-      const messages = [];
-      for (const unit of agent.history) {
-        if (
-          unit.rawResponse &&
-          unit.rawModel === agent.model &&
-          (unit.rawConfigVersion ?? "environment") === (profile.configVersion ?? "environment")
-        ) {
-          messages.push(...unit.rawResponse);
-          for (const message of unit.messages.filter((m) => m.role === "tool"))
-            messages.push({
-              type: "function_call_output",
-              call_id: message.tool_call_id,
-              output: message.content,
-            });
-        } else
-          for (const message of unit.messages) {
-            if (message.role === "tool")
-              messages.push({
-                type: "function_call_output",
-                call_id: message.tool_call_id,
-                output: message.content,
-              });
-            else {
-              if (message.content) messages.push({ role: message.role, content: message.content });
-              for (const c of message.tool_calls ?? [])
-                messages.push({
-                  type: "function_call",
-                  call_id: c.id,
-                  name: c.function.name,
-                  arguments: c.function.arguments,
-                });
-            }
-          }
-      }
       payload = {
         model: profile.modelName,
         instructions: input.messages[0].content,
-        input: messages,
+        input: responseItems(agent, input, profile),
         tools: input.tools.map((t) => ({ type: "function", ...t.function, strict: false })),
         stream: true,
         max_output_tokens: profile.maxOutput,
         store: false,
-        include: ["reasoning.encrypted_content"],
+        ...(!deepseek ? { include: ["reasoning.encrypted_content"] } : {}),
       };
       if (effort) payload.reasoning = { effort };
     }
@@ -432,6 +405,7 @@ export class ApiModel {
       );
     }
     let text = "",
+      reasoningContent,
       finished = false,
       rawResponse;
     const parts = new Map();
@@ -457,6 +431,8 @@ export class ApiModel {
           );
       } else {
         const choice = event.choices?.[0];
+        if (typeof choice?.delta?.reasoning_content === "string")
+          reasoningContent = (reasoningContent ?? "") + choice.delta.reasoning_content;
         if (choice?.delta?.content) {
           text += choice.delta.content;
           onDelta(choice.delta.content);
@@ -503,10 +479,20 @@ export class ApiModel {
         throw new HarnessError("INVALID_ARGUMENT", "模型工具参数不是完整 JSON");
       }
     }
+    if (protocol === "chat-completions")
+      rawResponse = [
+        {
+          role: "assistant",
+          content: text || null,
+          ...(calls.length ? { tool_calls: calls } : {}),
+          ...(reasoningContent !== undefined ? { reasoning_content: reasoningContent } : {}),
+        },
+      ];
     return {
       text,
       calls,
       rawResponse,
+      protocol,
       configVersion: profile.configVersion ?? "environment",
       simulated: false,
     };
