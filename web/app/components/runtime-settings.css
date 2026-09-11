@@ -172,6 +172,8 @@
 }
 .settings-dialog {
   max-width: 720px !important;
+  max-height: 88dvh;
+  overflow-y: auto;
 }
 @media (max-width: 650px) {
   .runtime-fields,

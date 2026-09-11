@@ -22,6 +22,10 @@ export async function settingsRoute(h, parts, method, read) {
     if (method === "POST") return h.workspaces.add((await read()).path);
   }
   if (area === "settings") {
+    if (resource === "delivery") {
+      if (method === "GET") return h.delivery.config.list();
+      if (method === "POST") return h.delivery.config.save(identifier, await read());
+    }
     const settings = h.models.settings;
     if (method === "GET" && resource === "models") return settings.list();
     if (method === "POST" && resource === "providers") return settings.saveProvider(await read());

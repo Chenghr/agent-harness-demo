@@ -1,0 +1,3 @@
+
+> harness-lab@1.0.0 typecheck:runtime
+> node web/node_modules/typescript/bin/tsc -p tsconfig.runtime.json

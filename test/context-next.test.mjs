@@ -56,6 +56,24 @@ test("compression preserves history appended while summarization is pending", as
   await p;
   assert.ok(a.history.some((u) => u.id === unit.id));
 });
+test("large recent tool exchanges compact to capacity without archiving an unfinished exchange", async (t) => {
+  const { h, s, a } = setup(t);
+  const units = [];
+  for (let i = 0; i < 4; i++) units.push(h.context.add(s, a, [
+    { role: "assistant", content: null, tool_calls: [{ id: `large-${i}`, type: "function", function: { name: "file_read", arguments: '{"path":"evidence.txt"}' } }] },
+    { role: "tool", tool_call_id: `large-${i}`, content: `证据${i}：` + "证".repeat(5000) },
+  ]));
+  const pending = h.context.add(s, a, [{ role: "assistant", content: "尚未收到结果", tool_calls: [{ id: "pending", type: "function", function: { name: "file_read", arguments: '{"path":"pending.txt"}' } }] }], false);
+  const result = await h.context.compact(s, a, { delayMs: 0 });
+  assert.ok(result.archiveId);
+  assert.ok(h.context.build(s, a, h.models.get(a.model)).tokens <= result.targetTokens);
+  assert.ok(a.history.includes(pending));
+  assert.ok(a.history.includes(units.at(-1)));
+  const archive = JSON.parse(h.store.readArtifact(s.id, result.archiveId).content);
+  assert.ok(archive.units.every(u => u.complete));
+  assert.ok(archive.units.some(u => u.id === units[0].id));
+  assert.ok(!archive.units.some(u => u.id === pending.id));
+});
 test("insufficient fixed context fails without replacing history or summary", async (t) => {
   const { h, s, a } = setup(t);
   for (let i = 0; i < 8; i++) h.context.add(s, a, [{ role: "assistant", content: "history " + i }]);

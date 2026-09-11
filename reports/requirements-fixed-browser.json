@@ -1,0 +1,82 @@
+{
+  "date": "2026-09-11",
+  "url": "http://127.0.0.1:4329/",
+  "provider": "本机注入的协议响应，没有实际生成图片或公开发布",
+  "sessionId": "task_1a635a2d-3fa",
+  "browserClosedAndReopened": true,
+  "restoredSessionAutomatically": true,
+  "restoredPreviewId": "preview_b625bbea-319",
+  "restoredApprovalId": "publish_52ecf1c9-5ce",
+  "imageElementsLoaded": 9,
+  "previewMembers": [
+    "王磊",
+    "李明",
+    "张静",
+    "刘洋",
+    "陈晨",
+    "赵敏",
+    "黄欣",
+    "周宇"
+  ],
+  "dialogHeight": 633.59375,
+  "viewportHeight": 720,
+  "dialogOverflow": "auto",
+  "publication": {
+    "id": "publish_52ecf1c9-5ce",
+    "previewId": "preview_b625bbea-319",
+    "status": "published",
+    "target": "ui-fixture-site",
+    "deployId": "ui-deploy-fixture"
+  },
+  "publishPOSTs": 1,
+  "selectedImageVersions": [
+    {
+      "key": "王磊",
+      "version": 1
+    },
+    {
+      "key": "李明",
+      "version": 1
+    }
+  ],
+  "rollbackFiles": {
+    "wang.txt": "王磊旧版",
+    "li.txt": "李明新版"
+  },
+  "savedExistingImageProfileThroughUI": true,
+  "events": [
+    {
+      "type": "agent.retried",
+      "agentId": "agent_5fd3d7ec-c75",
+      "data": {
+        "previousAgentId": "agent_7895d37e-c53",
+        "agentId": "agent_5fd3d7ec-c75"
+      }
+    },
+    {
+      "type": "agent.message",
+      "agentId": "agent_5fd3d7ec-c75",
+      "data": {
+        "message": "王磊那段压到 50 字，别动别人的。",
+        "mode": "append"
+      }
+    },
+    {
+      "type": "model.switch_requested",
+      "agentId": "agent_5fd3d7ec-c75",
+      "data": {
+        "from": "demo-balanced",
+        "to": "demo-focused"
+      }
+    },
+    {
+      "type": "image.model_changed",
+      "agentId": "agent_5fd3d7ec-c75",
+      "data": {
+        "modelId": "image-model_1f418b78-a80",
+        "note": "当前出图保留原模型，下次请求生效"
+      }
+    }
+  ],
+  "screenshot": "screenshots/requirements-delivery-fixed.png"
+}

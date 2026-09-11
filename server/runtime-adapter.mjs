@@ -37,11 +37,12 @@ export function createTaskController(harness, session, agent) {
       )
         await harness.waitChildren(session, agent, lease.signal);
       if (agent.pendingModel) {
+        const switching = agent.pendingModel;
         try {
-          await harness.applySwitch(session, agent, agent.pendingModel, lease.signal);
+          await harness.applySwitch(session, agent, switching, lease.signal);
         } catch (error) {
           lease.assertActive();
-          agent.pendingModel = null;
+          if (agent.pendingModel === switching) agent.pendingModel = null;
           harness.chat(session, "system", `模型未切换：${error.message}。保留原模型继续本轮任务。`);
         }
       }
@@ -144,6 +145,7 @@ export function createTaskController(harness, session, agent) {
           lease.assertActive();
           if (harness.processes.list(session.id).some((r) => r.status === "cleanup_unconfirmed"))
             throw Object.assign(new Error("资源尚未确认回收"), { code: "CLEANUP_FAILED" });
+          if (agent.pendingMessages.length || agent.pendingModel) return;
           await delay(20, lease.signal);
         }
       },

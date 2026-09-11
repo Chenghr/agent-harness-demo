@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { HarnessError, id } from "./core.mjs";
+import { photoSandboxRule } from "./privacy-policy.mjs";
 const string = { type: "string", maxLength: 200000 };
 const tool = (name, description, properties, required) => ({
   name,
@@ -44,16 +45,17 @@ export const WORKSPACE_TOOLS = [
 const fail = (message) => {
   throw new HarnessError("POLICY_DENIED", message);
 };
-export function sandboxCommand(root, storage, command, mode, extraDeny = []) {
+export function sandboxCommand(root, storage, command, mode, extraDeny = [], apiPorts = []) {
   root = fs.realpathSync(root);
   storage = fs.realpathSync(storage);
+  const localApiDeny = apiPorts.map(port => `(deny network-outbound (remote ip "localhost:${Number(port)}"))`).join(" ");
   if (mode === "full") {
     if (process.platform === "darwin")
       return {
         executable: "/usr/bin/sandbox-exec",
         args: [
           "-p",
-          `(version 1) (allow default) (deny file-read* file-write* (subpath ${JSON.stringify(storage)}))`,
+          `(version 1) (allow default) (deny file-read* file-write* (subpath ${JSON.stringify(storage)})) ${photoSandboxRule} ${localApiDeny}`,
           "/bin/sh",
           "-c",
           command,
@@ -66,7 +68,7 @@ export function sandboxCommand(root, storage, command, mode, extraDeny = []) {
   const q = (s) => JSON.stringify(s);
   const allowed = [root];
   const profile = `(version 1) (deny default) (allow process*) (allow sysctl-read) (allow mach-lookup) (allow file-read-metadata) (allow file-read* (literal "/") (subpath "/private/var/db/dyld") (subpath ${q(root)}) (subpath "/usr") (subpath "/bin") (subpath "/sbin") (subpath "/System") (subpath "/Library") (subpath "/opt") (subpath "/dev")) (deny network*) (allow file-write* ${allowed.map((p) => `(subpath ${q(p)})`).join(" ")}) (deny file-read* file-write* (subpath ${q(storage)}) ${extraDeny.map((p) => `(subpath ${q(p)})`).join(" ")}) (deny file-write* (regex #"/\\.git(/|$)")) (deny file-read* file-write* (regex #"/(\\.env([^/]*$)|\\.ssh/|\\.aws/|\\.gnupg/)"))`;
-  return { executable: "/usr/bin/sandbox-exec", args: ["-p", profile, "/bin/sh", "-c", command] };
+  return { executable: "/usr/bin/sandbox-exec", args: ["-p", profile + " " + photoSandboxRule, "/bin/sh", "-c", command] };
 }
 export async function executeWorkspaceTool(h, s, a, name, args, signal, epoch, action) {
   if (name === "file_list") return { files: h.workspaces.files(s.workspaceId) };
@@ -99,6 +101,8 @@ export async function executeWorkspaceTool(h, s, a, name, args, signal, epoch, a
       h.store.root,
       args.command,
       args.access === "full" ? "full" : s.permissionMode,
+      [],
+      [...h.apiPorts],
     );
     let result;
     try {

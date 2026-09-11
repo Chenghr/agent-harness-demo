@@ -2,6 +2,12 @@ import type { Capability, Files, Conflict, Finding } from "./types.ts";
 
 const rules = [
   {
+    id: "personal-photos", pattern: /~\/(?:Photos|Pictures)|私人相册|组员真人脸|人脸照片/i,
+    severity: "review" as const,
+    reason: "涉及私人相册或真人脸参考，需要核实是否为禁止示例；运行时不会因此获得读取权限",
+    suggestion: "使用文字描述的虚构形象，不读取相册或提交真人脸参考",
+  },
+  {
     id: "root-delete",
     pattern: /\brm\s+-[rfRF]+\s+\/(?:\s|$)/,
     severity: "block" as const,
@@ -84,7 +90,7 @@ export function inspect(record: Capability, files: Files): Capability["scan"] {
       evidence: record.entry,
     });
   for (const f of findings.filter((f) =>
-    ["network", "execute", "root-delete", "escape"].includes(f.rule),
+    ["network", "execute", "root-delete", "escape", "personal-photos"].includes(f.rule),
   ))
     record.permissions.push({
       operation: f.rule,

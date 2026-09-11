@@ -1,0 +1,23 @@
+✔ A1: one of eight children fails; seven siblings continue and parent receives one failure receipt (1191.245958ms)
+✔ A2 GAP: rollback of a round containing two members reverts both; no member selector (1665.278334ms)
+ℹ 已复现限制：同一轮两人的文件一起撤销，不能选择只回退王磊。
+✔ B1: append to a running copy child reaches its next decision and preserves another member's file (1147.726625ms)
+✔ B2 GAP: default main-chat steering cancels unrelated live children (1081.180542ms)
+ℹ 已复现限制：默认 steer 会取消所有分支；需要显式定向 append，不能声称聊天已自动局部路由。
+✔ C: a loaded portrait skill grants no album access and child cannot exceed parent's boundary (1443.096125ms)
+ℹ 读取权限测试通过；当前静态扫描未标出这条相册/真人脸指令，语义安全评估未运行。
+✔ D: closing/reopening the event stream retains the task tree, approval ID and background progress (1187.537542ms)
+✔ E GAP: main model can switch and preserve child progress; an individual child has no switch endpoint (1081.531875ms)
+ℹ 已复现限制：切换主模型不改变子模型，也没有在途子模型切换入口。
+✔ F GAP: main responds once after delegation, but append cannot wake it while children are pending (1361.078875ms)
+ℹ 已复现限制：补充消息要等后台全部完成才能被主助手处理；改用 steer 又会取消后台。
+✔ BASE GAP: no native image-generation or preview/publish API; no website preview assertion (1050.863209ms)
+ℹ 已复现限制：通用成果验收不等于发布批准，不能检查八人形象齐全、风格或可访问的网站预览。
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 11407.0215

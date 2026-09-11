@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { HarnessError, id, deferred, now } from "./core.mjs";
 import { excludedPath } from "./workspaces.mjs";
+import { assertNoPhotoPath } from "./privacy-policy.mjs";
 export const PERMISSION_MODES = ["ask", "review", "full"];
 const deny = (message) => {
   throw new HarnessError("POLICY_DENIED", message);
@@ -31,6 +32,8 @@ export class PermissionService {
     }
     const actual = path.join(fs.realpathSync(probe), ...suffix),
       inside = actual.startsWith(root + path.sep);
+    assertNoPhotoPath(absolute);
+    assertNoPhotoPath(actual);
     if (actual === root || actual === path.parse(actual).root) deny("不能直接操作工作区根目录");
     const storage = fs.realpathSync(this.h.store.root);
     if (actual === storage || actual.startsWith(storage + path.sep))

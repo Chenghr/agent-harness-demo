@@ -1,4 +1,5 @@
 import { WorkspaceManager } from "./workspaces.mjs";
+import { DeliveryService } from "./delivery/service.mjs";
 import { PermissionService, PERMISSION_MODES } from "./permissions.mjs";
 import { executeWorkspaceTool } from "./workspace-tools.mjs";
 import { Companion } from "./companion.mjs";
@@ -53,6 +54,7 @@ export class Harness extends EventEmitter {
     maxAgents = 8,
     maxAgentDepth = 2,
     agentDefinitionsDir = fileURLToPath(new URL("../config/agents", import.meta.url)),
+    deliveryOptions,
   } = {}) {
     super();
     this.store = new Store(root);
@@ -62,6 +64,7 @@ export class Harness extends EventEmitter {
       protectedRoots: [this.store.root],
     });
     this.permissions = new PermissionService(this);
+    this.delivery = new DeliveryService(this, deliveryOptions);
     this.agentDefinitions = new AgentDefinitionRegistry(agentDefinitionsDir, {
       tools: [...this.catalog.tools.keys()],
       skills: [...this.catalog.skills.keys()],
@@ -91,6 +94,7 @@ export class Harness extends EventEmitter {
       const s = this.sessions.get(sid);
       if (s) this.event(s, type, data, aid);
     });
+    this.apiPorts = new Set();
     this.sessions = new Map();
     this.controllers = new Map();
     this.approvalWaiters = new Map();
@@ -125,6 +129,7 @@ export class Harness extends EventEmitter {
     return {
       version: "1.0.0",
       models: this.models.list(),
+      imageModels: this.delivery.config.list().images,
       counts: this.catalog.counts(),
       scenarios: SCENARIOS,
       workspaces: this.workspaces.list(),
@@ -269,6 +274,9 @@ export class Harness extends EventEmitter {
         goal: a.goal,
         status: a.output?.cleanup === "unconfirmed" ? "interrupted" : a.status,
         model: a.model,
+        pendingModel: a.pendingModel,
+        imageModelId: a.imageModelId,
+        assignedImageIds: a.assignedImageIds,
         epoch: a.epoch,
         loadedTools: a.loadedTools,
         loadedSkills: a.loadedSkills,
@@ -285,6 +293,7 @@ export class Harness extends EventEmitter {
               permissionMode: a.delegation.definition.permissionMode,
               instructions: a.delegation.definition.instructions,
               tools: a.delegation.definition.tools,
+              allowedModels: a.delegation.definition.allowedModels,
               version: a.delegation.definition.version,
             }
           : undefined,
@@ -323,6 +332,7 @@ export class Harness extends EventEmitter {
       readOnly: s.readOnly,
       acceptance: s.acceptance,
       agents,
+      delivery: this.delivery.snapshot(s),
       chat: s.chat,
       actions: s.actions,
       approvals: s.approvals,
@@ -394,12 +404,12 @@ export class Harness extends EventEmitter {
       this.event(s, "workspace.checkpoint_failed", { message: error.message });
     }
   }
-  rollbackWorkspace(sid, roundId) {
+  rollbackWorkspace(sid, roundId, paths) {
     const s = this.get(sid);
     if (!s.workspaceId) throw new HarnessError("INVALID_ARGUMENT", "此任务不是用户工作区");
     if (this.controller(s, s.agents.main).running || this.processes.list(sid).length)
       throw new HarnessError("WORKSPACE_BUSY", "请先停止任务并等待资源回收");
-    const result = this.workspaces.rollback(s.workspaceId, sid, roundId);
+    const result = this.workspaces.rollback(s.workspaceId, sid, roundId, paths);
     s.workspaceRevision++;
     s.revision++;
     s.status = "idle";
@@ -412,10 +422,10 @@ export class Harness extends EventEmitter {
     this.context.add(s, s.agents.main, [
       {
         role: "user",
-        content: `文件已撤销一轮修改（${roundId}）。旧验证结果已失效，后续任务必须重新读取文件。原任务要求：${s.userRequirements.join("\n")}`,
+        content: `已从修改记录 ${roundId} 撤销这些文件：${result.changes.map(c => c.path).join("、")}。其余文件保持现状。旧验证结果已失效，后续任务必须重新读取文件。原任务要求：${s.userRequirements.join("\n")}`,
       },
     ]);
-    this.chat(s, "system", "已撤销所选一轮的文件修改。保留对话记录，旧验证结果已失效。");
+    this.chat(s, "system", `已撤销所选 ${result.changes.length} 个文件的修改。保留对话记录，旧验证结果已失效。`);
     this.event(s, "workspace.rolled_back", result);
     this.store.save(s);
     return result;
@@ -488,7 +498,7 @@ export class Harness extends EventEmitter {
       this.event(s, "tool.started", { tool: name, args, callId }, a.id);
       const execute = () => this.execute(s, a, name, args, signal, epoch, action);
       const result =
-        ["run_tests", "run_diagnostic", "shell_run"].includes(name) ||
+        ["run_tests", "run_diagnostic", "shell_run", "image_generate"].includes(name) ||
         definition.adapter === "node-command-v1"
           ? await this.toolSlots.run(execute, signal)
           : await execute();
@@ -651,6 +661,11 @@ export class Harness extends EventEmitter {
   async execute(s, a, name, args, signal, epoch, action) {
     this.valid(s, a, epoch, signal);
     const workspace = this.workspace(s, a);
+    if (name === "image_models") return { models: this.delivery.config.list().images };
+    if (name === "image_generate") return this.delivery.generate(s, a, args, signal, epoch);
+    if (name === "site_preview") return this.delivery.preview(s, a, args);
+    if (name === "greeting_site") return this.delivery.greeting(s, a, args);
+    if (name === "site_request_publish") return this.delivery.requestPublish(s, a, args.previewId);
     if (
       s.workspaceId &&
       !a.parentId &&
@@ -899,7 +914,7 @@ export class Harness extends EventEmitter {
       await this.cancelAgent(s.id, args.agentId, a.id);
       return { cancelled: true };
     }
-    if (name === "agent_wait") return this.waitChildren(s, a, signal);
+    if (name === "agent_wait") return this.waitChildren(s, a, signal, undefined, true);
     if (name === "context_compact")
       return this.context.compact(s, a, { signal, force: true, delayMs: 120 * this.speed });
     const definition = a.toolSnapshots?.[name] ?? this.catalog.getTool(name);
@@ -941,7 +956,7 @@ export class Harness extends EventEmitter {
   isDescendant(s, agentId, ancestorId) {
     return this.supervisor(s).isDescendant(agentId, ancestorId);
   }
-  async waitChildren(s, a, signal, onlyId) {
+  async waitChildren(s, a, signal, onlyId, interruptible = false) {
     this.setStatus(s, a, "waiting");
     try {
       const children = () =>
@@ -950,6 +965,7 @@ export class Harness extends EventEmitter {
         this.valid(s, a, a.epoch, signal);
         if (children().some((child) => child.output?.cleanup === "unconfirmed"))
           throw new HarnessError("CLEANUP_FAILED", "后台资源尚未确认回收");
+        if (interruptible && (a.pendingMessages.length || a.pendingModel)) break;
         await delay(20, signal);
       }
       return {
@@ -964,7 +980,7 @@ export class Harness extends EventEmitter {
       if (!signal.aborted && !s.closing) this.setStatus(s, a, "running");
     }
   }
-  messageAgent(sid, aid, message, parentId = "main", mode = "append") {
+  messageAgent(sid, aid, message, parentId = "main", mode = "append", source = "parent") {
     const s = this.get(sid),
       a = this.supervisor(s).assertManaged(aid, parentId);
     if (!this.supervisor(s).isOpen(a))
@@ -979,7 +995,7 @@ export class Harness extends EventEmitter {
     a.delegation.inputVersion++;
     a.delegation.requirementRevision = s.revision;
     const controller = this.controller(s, a);
-    controller.enqueue(message, "parent");
+    controller.enqueue(message, source);
     if (mode === "steer") {
       a.plan = null;
       a.cursor = 0;
@@ -992,6 +1008,37 @@ export class Harness extends EventEmitter {
     this.event(s, "agent.message", { message, mode }, aid);
     return { queued: true };
   }
+  userMessage(sid, { text, mode = "append", agentId } = {}) {
+    if (!agentId || agentId === "main") return this.message(sid, text, mode);
+    const result = this.messageAgent(sid, agentId, text, "main", mode, "user");
+    this.chat(this.get(sid), "user", `发给子助手：${text}`);
+    return result;
+  }
+  retryAgent(sid, aid, { message, model } = {}) {
+    const s = this.get(sid), old = this.supervisor(s).assertManaged(aid, "main");
+    if (!old.output || this.supervisor(s).live(old))
+      throw new HarnessError("CLOSING", "请等待此子任务结束或停止后再重做");
+    const parent = s.agents[old.parentId];
+    if (parent.id !== "main") throw new HarnessError("POLICY_DENIED", "请由直接父助手重新分配嵌套任务");
+    const request = {
+      goal: message || old.goal, type: old.delegation.type, model: model || old.model,
+      files: old.delegation.materials.filter(m => m.sourcePath).map(m => m.sourcePath),
+      artifacts: old.delegation.artifactIds,
+      images: old.assignedImageIds ?? [],
+      background: old.delegation.background, expectedOutput: old.delegation.expectedOutput,
+      mode: "background",
+    };
+    validate(this.catalog.getTool("agent_spawn").parameters, request);
+    this.models.get(request.model);
+    if (!old.delegation.definition.allowedModels.includes(request.model))
+      throw new HarnessError("POLICY_DENIED", "重做不能扩大原助手的模型范围");
+    if (s.closing) this.message(sid, `重新处理子任务：${request.goal}。其他已完成成果保留。`, "append");
+    const ref = this.spawnAgent(s, parent, request);
+    s.agents[ref.agentId].replacesAgentId = aid;
+    s.agents[ref.agentId].imageModelId = old.imageModelId;
+    this.event(s, "agent.retried", { previousAgentId: aid, agentId: ref.agentId }, ref.agentId);
+    return ref;
+  }
   async cancelAgent(sid, aid, parentId = "main") {
     await this.supervisor(this.get(sid)).cancelTree(aid, parentId);
     return { cancelled: true };
@@ -999,7 +1046,7 @@ export class Harness extends EventEmitter {
   async cancelDescendants(s, aid) {
     await this.supervisor(s).cancelChildren(s.agents[aid]);
   }
-  message(sid, text, mode = "steer") {
+  message(sid, text, mode = "append") {
     const s = this.get(sid),
       a = s.agents.main;
     if (typeof text !== "string" || !text.trim() || text.length > 10000)
@@ -1051,6 +1098,7 @@ export class Harness extends EventEmitter {
     s.closing = true;
     s.status = "cancelling";
     s.revision++;
+    await this.delivery.cancel(s);
     this.revoke(sid);
     this.event(s, "session.cancel_requested", {});
     for (const a of Object.values(s.agents)) a.branchClosed = true;
@@ -1092,23 +1140,29 @@ export class Harness extends EventEmitter {
     } else throw new HarnessError("INVALID_ARGUMENT", "未知验收操作");
     return this.snapshot(sid);
   }
-  requestSwitch(sid, model) {
+  requestSwitch(sid, model, agentId = "main") {
     const s = this.get(sid),
-      a = s.agents.main;
+      a = agentId === "main" ? s.agents.main : this.supervisor(s).assertManaged(agentId, "main");
+    if (a.parentId && !this.supervisor(s).isOpen(a))
+      throw new HarnessError("CLOSING", "子任务已结束，请通过重做选择新模型");
+    if (a.parentId && !a.delegation.definition.allowedModels.includes(model))
+      throw new HarnessError("POLICY_DENIED", "此助手不能使用指定模型");
     const target = this.models.get(model);
     if (!target.tools)
       throw new HarnessError("MODEL_INCOMPATIBLE", "目标模型不支持任务需要的工具调用");
-    if (model === a.model) return this.snapshot(sid);
+    if (model === a.model) { a.pendingModel = null; return this.snapshot(sid); }
     a.pendingModel = model;
     this.event(s, "model.switch_requested", { from: a.model, to: model }, a.id);
     if (!this.controller(s, a).running)
-      return this.applySwitch(s, a, model, new AbortController().signal).then(() =>
-        this.snapshot(sid),
-      );
+      return this.applySwitch(s, a, model, new AbortController().signal)
+        .then(() => this.snapshot(sid)).catch(error => {
+          if (a.pendingModel === model) a.pendingModel = null;
+          throw error;
+        });
     this.chat(
       s,
       "system",
-      "已请求模型切换，将在当前工具交互完整结束后交接。后台 Agent 保持原模型。",
+      `已请求${a.parentId ? "指定子助手" : "主助手"}切换模型，将在当前工具交互完整结束后交接。其他助手保持原模型。`,
     );
     return this.snapshot(sid);
   }
@@ -1120,6 +1174,7 @@ export class Harness extends EventEmitter {
     const contextVersion = a.contextVersion ?? 0;
     const historyStamp = JSON.stringify(a.history);
     const handoff = {
+      agentId: a.id,
       from,
       to: model,
       time: now(),
@@ -1162,6 +1217,7 @@ export class Harness extends EventEmitter {
       s.revision !== revision ||
       a.epoch !== epoch ||
       (a.contextVersion ?? 0) !== contextVersion ||
+      a.pendingModel !== model ||
       JSON.stringify(a.history) !== historyStamp
     )
       throw new HarnessError("HANDOFF_STALE", "交接期间任务已改变，未提交");
@@ -1193,6 +1249,7 @@ export class Harness extends EventEmitter {
         null,
         2,
       ),
+      a.id,
     );
     a.model = model;
     a.summary = candidate.summary;
@@ -1201,7 +1258,7 @@ export class Harness extends EventEmitter {
     a.history = candidate.history;
     a.contextVersion = (a.contextVersion ?? 0) + 1;
     a.pendingModel = null;
-    s.model = model;
+    if (!a.parentId) s.model = model;
     s.handoffs.push({ ...handoff, artifactId: artifact.id });
     this.event(
       s,
@@ -1218,11 +1275,12 @@ export class Harness extends EventEmitter {
     this.chat(
       s,
       "system",
-      `主 Agent 已从 ${this.models.profiles.find((p) => p.id === from)?.label ?? from} 切换为 ${target.label}。目标、约束、执行结果和有效授权已交接；后台任务保持原模型。`,
+      `${a.parentId ? "子助手" : "主助手"}已从 ${this.models.profiles.find((p) => p.id === from)?.label ?? from} 切换为 ${target.label}。目标、约束、执行结果和有效授权已交接；其他任务保持原模型。`,
     );
   }
   async close() {
     this.shuttingDown = true;
+    await this.delivery.close();
     await this.companion.close();
     await this.context.close();
     for (const review of this.managementReviews.values()) review.controller.abort();

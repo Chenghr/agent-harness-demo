@@ -1,4 +1,5 @@
 import { settingsRoute } from "./settings/routes.mjs";
+import { deliveryRoute } from "./delivery/routes.mjs";
 import { capabilityRoute } from "./capability-routes.mjs";
 import { RuntimeFault } from "./runtime/contracts.ts";
 import http from "node:http";
@@ -64,6 +65,14 @@ export function createServer({
         )
           throw new HarnessError("FORBIDDEN", "请求来源不在本地应用范围");
       }
+      if (req.method === "GET" && url.pathname.startsWith("/preview/")) {
+        const [, , sid, previewId, ...rest] = url.pathname.split("/").map(decodeURIComponent);
+        const file = harness.delivery.previewFile(harness.get(sid), previewId, rest.join("/"));
+        res.writeHead(200, { "Content-Type": file.mime, "Cache-Control": "no-store",
+          "X-Frame-Options": "SAMEORIGIN",
+          "Content-Security-Policy": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'" });
+        res.end(file.bytes); return;
+      }
       if (url.pathname.startsWith("/api/")) {
         const parts = url.pathname.slice(5).split("/").filter(Boolean).map(decodeURIComponent);
         const method = req.method;
@@ -118,6 +127,14 @@ export function createServer({
           }
           const sid = parts[1];
           const session = harness.get(sid);
+          if (parts[2] === "delivery") {
+            if (method === "GET" && parts[3] === "assets") {
+              const asset = harness.delivery.asset(session, parts[4]);
+              res.writeHead(200, { "Content-Type": asset.mime, "Cache-Control": "private, max-age=3600" });
+              res.end(harness.delivery.imageBytes(session, asset)); return;
+            }
+            return send(res, 200, await deliveryRoute(harness, session, parts, method, () => readBody(req)));
+          }
           if (parts[2] === "changes") {
             if (!session.workspaceId) return send(res, 200, []);
             if (method === "GET")
@@ -135,7 +152,7 @@ export function createServer({
                       })),
               );
             if (method === "POST")
-              return send(res, 200, harness.rollbackWorkspace(sid, (await readBody(req)).roundId));
+              { const body = await readBody(req); return send(res, 200, harness.rollbackWorkspace(sid, body.roundId, body.paths)); }
           }
           if (parts[2] === "permissions" && method === "POST")
             return send(res, 200, harness.permissions.set(session, (await readBody(req)).mode));
@@ -282,7 +299,7 @@ export function createServer({
           if (method === "POST") {
             const body = await readBody(req);
             if (parts[2] === "messages")
-              return send(res, 200, harness.message(sid, body.text, body.mode));
+              return send(res, 200, harness.userMessage(sid, body));
             if (parts[2] === "stop") return send(res, 200, await harness.stop(sid));
             if (parts[2] === "review") return send(res, 200, harness.reviewCompletion(sid, body));
             if (parts[2] === "model")
@@ -323,11 +340,23 @@ export function createServer({
                 );
               if (parts[4] === "cancel")
                 return send(res, 200, await harness.cancelAgent(sid, parts[3]));
+              if (parts[4] === "model")
+                return send(res, 200, await harness.requestSwitch(sid, body.model, parts[3]));
+              if (parts[4] === "retry")
+                return send(res, 201, harness.retryAgent(sid, parts[3], body));
+              if (parts[4] === "image-model") {
+                const a = harness.supervisor(session).assertManaged(parts[3], "main");
+                const profile = harness.delivery.config.image(body.modelId);
+                if (!harness.supervisor(session).isOpen(a)) throw new HarnessError("CLOSING", "此子任务已经结束");
+                a.imageModelId = profile.id;
+                harness.event(session, "image.model_changed", { modelId: profile.id, note: "当前出图保留原模型，下次请求生效" }, a.id);
+                return send(res, 200, harness.snapshot(sid));
+              }
               if (parts[4] === "message")
                 return send(
                   res,
                   200,
-                  harness.messageAgent(sid, parts[3], body.message, "main", body.mode),
+                  harness.messageAgent(sid, parts[3], body.message, "main", body.mode, "user"),
                 );
             }
           }
@@ -386,7 +415,10 @@ export function createServer({
       if (status === 500) console.error(error);
     }
   });
+  let boundPort;
+  server.on("listening", () => { boundPort = server.address().port; harness.apiPorts.add(boundPort); });
   server.on("close", () => {
+    harness.apiPorts.delete(boundPort);
     for (const stream of streams) stream.end();
   });
   return {

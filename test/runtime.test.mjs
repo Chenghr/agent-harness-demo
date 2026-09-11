@@ -209,8 +209,8 @@ test("successive steering uses only the latest user direction", async (t) => {
   const snap = h.create(),
     s = h.get(snap.id);
   await waitFor(() => count === 1);
-  h.message(s.id, "第一条修正");
-  h.message(s.id, "第二条修正，只读");
+  h.message(s.id, "第一条修正", "steer");
+  h.message(s.id, "第二条修正，只读", "steer");
   gate.resolve();
   await waitFor(() => s.status === "needs_review");
   assert.equal(s.agents.main.goal, "第二条修正，只读");

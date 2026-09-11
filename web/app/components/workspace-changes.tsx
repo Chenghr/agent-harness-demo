@@ -8,6 +8,7 @@ type Round = {
   startedAt: string;
   afterCommit?: string;
   revertedAt?: string;
+  revertedPaths?: string[];
   changes: { path: string; kind: string }[];
   files?: { path: string; kind: string; before: string; after: string }[];
 };
@@ -21,6 +22,7 @@ export function WorkspaceChanges({
   onChanged: () => void;
 }) {
   const [pending, setPending] = useState<Round | null>(null);
+  const [paths, setPaths] = useState<string[]>([]);
   const [rounds, setRounds] = useState<Round[]>([]),
     [detail, setDetail] = useState<Round | null>(null),
     [error, setError] = useState(''),
@@ -36,7 +38,10 @@ export function WorkspaceChanges({
     setBusy(true);
     setError('');
     try {
-      await runtimeApi(`/sessions/${sessionId}/changes`, { roundId: r.id });
+      await runtimeApi(`/sessions/${sessionId}/changes`, {
+        roundId: r.id,
+        paths,
+      });
       setDetail(null);
       setPending(null);
       await refresh();
@@ -60,11 +65,32 @@ export function WorkspaceChanges({
       {!rounds.length && <p>本次对话还没有文件记录。</p>}
       {pending && (
         <section className="rollback-confirm" aria-label="确认撤销修改">
-          <strong>撤销「{pending.label}」这一轮的文件修改？</strong>
+          <strong>选择要撤销的文件</strong>
+          {pending.changes
+            .filter((c) => !pending.revertedPaths?.includes(c.path))
+            .map((c) => (
+              <label key={c.path}>
+                <input
+                  type="checkbox"
+                  checked={paths.includes(c.path)}
+                  onChange={(e) =>
+                    setPaths((p) =>
+                      e.target.checked
+                        ? [...p, c.path]
+                        : p.filter((x) => x !== c.path),
+                    )
+                  }
+                />
+                {c.path}
+              </label>
+            ))}
           <p>保留对话记录。遇到后续修改会报告冲突，不覆盖用户内容。</p>
           <div className="runtime-actions">
-            <button disabled={busy} onClick={() => void undo(pending)}>
-              确认撤销
+            <button
+              disabled={busy || !paths.length}
+              onClick={() => void undo(pending)}
+            >
+              撤销所选 {paths.length} 个文件
             </button>
             <button disabled={busy} onClick={() => setPending(null)}>
               取消
@@ -103,9 +129,16 @@ export function WorkspaceChanges({
                 !!r.revertedAt ||
                 !r.changes.length
               }
-              onClick={() => setPending(r)}
+              onClick={() => {
+                setPending(r);
+                setPaths(
+                  r.changes
+                    .filter((c) => !r.revertedPaths?.includes(c.path))
+                    .map((c) => c.path),
+                );
+              }}
             >
-              撤销这一轮
+              选择文件撤销
             </button>
           </div>
         </article>

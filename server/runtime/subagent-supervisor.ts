@@ -8,6 +8,7 @@ export interface SpawnRequest {
   type?: string;
   files?: string[];
   artifacts?: string[];
+  images?: string[];
   background?: string;
   expectedOutput?: string;
   reason?: string;

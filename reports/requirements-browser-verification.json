@@ -1,0 +1,40 @@
+{
+  "testedAt": "2026-09-11T04:00:26.519Z",
+  "productCommit": "797e207",
+  "source": "用户提供的教师节网站需求截图",
+  "environment": {
+    "os": "macOS",
+    "node": "v24.19.0",
+    "server": "isolated localhost:4329",
+    "models": "deterministic fixture; no external model requests"
+  },
+  "baseline": {
+    "tests": 145,
+    "passed": 145
+  },
+  "scenario": {
+    "tests": 9,
+    "assertionsPassed": 9,
+    "note": "GAP 测试通过表示已复现当前缺口，不表示需求满足"
+  },
+  "browser": {
+    "closedAndOpenedNewTab": true,
+    "automaticallyReselected": false,
+    "recentTaskPreserved": true,
+    "manualSelectionRestoresTree": true,
+    "treeNodes": 3,
+    "childResults": 2,
+    "pendingApprovalPreserved": true,
+    "approvalKind": "file_write; not website publication",
+    "screenshot": "screenshots/requirements-reconnect.png",
+    "beforeSelection": "- text: Harness\n- generic: 工作空间\n- button \"新建任务\":\n  - text: 新建任务\n- generic: 工作台\n- list:\n  - button \"对话与执行\":\n    - generic: 对话与执行\n  - button \"能力管理\":\n    - generic: 能力管理\n  - button \"快速加载 2434\":\n    - generic: 快速加载\n    - generic: \"2434\"\n- text: 最近任务\n- generic: \"1\"\n- list:\n  - button \"教师节网站验收测试：关闭页面再回来\":\n    - generic: 教师节网站验收测试：关闭页面再回来\n- generic: 本地运行 · 文件与对话保存在本机\n- button \"模型与运行设置\":\n  - text: 模型与运行设置\n- text: HARNESS LAB\n- generic: v1.0\n- generic \"随手表达心情\":\n  - button \"不错，点赞\": 👍\n  - button \"不满意，点踩\": 👎\n  - button \"做得不好，扔鸡蛋\": 🥚\n  - button \"太慢了\": 🐢\n- button \"我在这里\"\n- button \"打开小伴\":\n- main:\n  - text: 工作台\n  - strong: 新建任务\n  - button \"运行详情\":\n    - text: 运行详情\n  - generic: 本地模式\n  - button \"能力目录\":\n    - text: 能力目录\n  - combobox \"选择工作区\":\n    - option \"示例工作区\" [selected]\n  - button \"添加目录\"\n  - generic: 独立教学示例\n  - region \"对话工作区\":\n    - text: 任务对话\n    - generic: 模拟演示\n    - paragraph: 把事情交给助手，进展留在这里\n    - heading \"今天想完成什么？\" [level=1]\n    - paragraph: 描述你要做的事。过程中可以随时补充要求，完成后在这里查看成果。\n    - button \"试试一个演示任务\":\n      - text: 试试一个演示任务\n    - paragraph:\n      - text: 模拟模型采用可复现脚本；工具、文件操作与进程管理真实执行。\n    - textbox \"任务消息\":\n      - /placeholder: 输入任务，例如：根据已有规则检查隐私实体标注…\n    - combobox \"权限模式\" [disabled]:\n      - option \"请求批准\" [selected]\n      - option \"帮我批准\"\n      - option \"完全访问权限\"\n    - combobox \"选择模型\":\n      - generic: Demo · 标准\n      - img: ▼\n    - textbox: demo-balanced\n    - button \"发送消息\" [disabled]:\n    - generic: Enter 发送 · Shift + Enter 换行\n    - generic: 随时补充要求",
+    "afterSelection": "- text: Harness\n- generic: 工作空间\n- button \"新建任务\":\n  - text: 新建任务\n- generic: 工作台\n- list:\n  - button \"对话与执行\":\n    - generic: 对话与执行\n  - button \"能力管理\":\n    - generic: 能力管理\n  - button \"快速加载 2434\":\n    - generic: 快速加载\n    - generic: \"2434\"\n- text: 最近任务\n- generic: \"1\"\n- list:\n  - button \"教师节网站验收测试：关闭页面再回来\":\n    - generic: 教师节网站验收测试：关闭页面再回来\n- generic: 本地运行 · 文件与对话保存在本机\n- button \"模型与运行设置\":\n  - text: 模型与运行设置\n- text: HARNESS LAB\n- generic: v1.0\n- generic \"随手表达心情\":\n  - button \"不错，点赞\": 👍\n  - button \"不满意，点踩\": 👎\n  - button \"做得不好，扔鸡蛋\": 🥚\n  - button \"太慢了\": 🐢\n- button \"有操作等待你的授权\"\n- button \"打开小伴\":\n- main:\n  - text: 工作台\n  - strong: 教师节网站验收测试：关闭页面再回来\n  - button \"收起详情\" [expanded] [active]:\n    - text: 收起详情\n  - button \"成果\":\n    - text: 成果\n  - generic: 实时连接\n  - button \"能力目录\":\n    - text: 能力目录\n  - combobox \"选择工作区\":\n    - option \"示例工作区\" [selected]\n  - button \"添加目录\"\n  - generic: 独立教学示例\n  - region \"对话工作区\":\n    - text: 任务对话\n    - generic: 等待授权\n    - generic: 模拟演示\n    - article:\n      - generic: 你\n      - strong: 你\n      - time: 11:54:15\n      - generic: 教师节网站验收测试：关闭页面再回来\n    - article:\n      - strong: 主助手\n      - generic: Demo · 标准\n      - time: 11:54:30\n      - generic: 测试任务：等待写入本地预览的批准。\n    - text: 操作需要你的授权\n    - generic: 2 次调用\n    - strong: 执行前，请确认这次修改\n    - paragraph: 主助手 · file_write · preview.html\n    - generic: <h1>测试预览</h1>\n    - button \"拒绝\"\n    - button \"允许此助手继续修改此文件\"\n    - button \"仅本次允许\":\n      - text: 仅本次允许\n    - textbox \"任务消息\":\n      - /placeholder: 补充要求，或输入新的方向…\n    - combobox \"权限模式\" [disabled]:\n      - option \"请求批准\" [selected]\n      - option \"帮我批准\"\n      - option \"完全访问权限\"\n    - combobox \"选择模型\":\n      - generic: Demo · 标准\n      - img: ▼\n    - textbox: demo-balanced\n    - combobox \"消息处理方式\":\n      - generic: 立即改方向\n      - img: ▼\n    - textbox: steer\n    - button \"停止整个任务\":\n    - button \"发送消息\" [disabled]:\n    - generic: Enter 发送 · Shift + Enter 换行\n    - generic: 随时补充要求\n  - complementary \"运行观察面板\":\n    - text: 运行观察\n    - button \"收起运行详情\":\n    - strong: \"2\"\n    - text: 工具调用\n    - strong: \"0\"\n    - text: 后台活动\n    - strong: \"0\"\n    - text: 上下文压缩\n    - tablist:\n      - tab \"任务树\" [selected]\n      - tab \"工具\"\n      - tab \"上下文\"\n      - tab \"事件\"\n      - tab \"产物\"\n    - tabpanel \"任务树\":\n      - text: AGENT TREE\n      - generic: 3 个节点\n      - strong: 主助手\n      - generic: 等待授权\n      - paragraph: 教师节网站验收测试：关闭页面再回来\n      - generic: Demo · 标准\n      - generic: 轮次 1\n      - strong: 通用助手\n      - generic: 待核实\n      - paragraph: 王磊虚拟形象（合成测试）\n      - generic: Demo · 标准\n      - generic: 轮次 1\n      - generic: 后台执行\n      - generic \"材料与工作范围\"\n      - button \"查看结果\":\n        - text: 查看结果\n      - strong: 通用助手\n      - generic: 待核实\n      - paragraph: 文案（合成测试）\n      - generic: Demo · 标准\n      - generic: 轮次 1\n      - generic: 后台执行\n      - generic \"材料与工作范围\"\n      - button \"查看结果\":\n        - text: 查看结果\n      - combobox \"子助手类型\":\n        - option \"分析助手\"\n        - option \"通用助手\" [selected]\n        - option \"检查助手\"\n      - textbox \"后台任务目标或补充\":\n        - /placeholder: 这次需要助手完成什么？\n      - textbox \"分配给子助手的文件\":\n        - /placeholder: 文件路径，逗号分隔；留空不分配文件\n      - button \"创建后台任务\" [disabled]:\n        - text: 创建后台任务\n      - text: 本地执行资源\n      - generic: \"0\"\n      - paragraph:\n        - text: 当前没有存活的工具进程\n    - generic: 可追踪 · 可打断 · 有归属\n    - generic \"任务运行中\""
+  },
+  "notVerified": [
+    "真实模型自主规划和局部消息识别质量",
+    "真实出图、八人风格一致性",
+    "真实网站部署和发布时间",
+    "后端进程重启后自动续跑"
+  ],
+  "sourceCodeChanged": false
+}

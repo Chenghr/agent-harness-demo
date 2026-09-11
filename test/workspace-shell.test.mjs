@@ -5,6 +5,27 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { sandboxCommand } from "../server/workspace-tools.mjs";
+import http from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+test("macOS full-access shell cannot read photo folders or call the harness approval API", { skip: process.platform !== "darwin" }, async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "full-access-boundary-"));
+  const work = path.join(root, "work"), store = path.join(root, "state");
+  fs.mkdirSync(work); fs.mkdirSync(store); fs.mkdirSync(path.join(work, "Photos"));
+  fs.writeFileSync(path.join(work, "Photos", "fixture.txt"), "PRIVATE_SENTINEL");
+  let contacted = false;
+  const server = http.createServer((_req, res) => { contacted = true; res.end("should not reach approval API"); });
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  t.after(() => { server.closeAllConnections(); server.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  const port = server.address().port;
+  const run = command => { const p = sandboxCommand(work, store, command, "full", [], [port]); return promisify(execFile)(p.executable, p.args, { cwd: work, timeout: 5000 }); };
+  await assert.rejects(run("cat Photos/fixture.txt"));
+  await assert.rejects(run(`/usr/bin/curl --max-time 2 http://127.0.0.1:${port}/api/fake-approval`));
+  assert.equal(contacted, false);
+  await run("printf okay > normal.txt");
+  assert.equal(fs.readFileSync(path.join(work, "normal.txt"), "utf8"), "okay");
+});
 test(
   "macOS shell profile permits workspace output and denies outside reads/writes and credentials",
   { skip: process.platform !== "darwin" },

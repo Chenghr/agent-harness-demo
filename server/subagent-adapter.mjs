@@ -16,6 +16,7 @@ export function createSupervisor(h, s) {
         h.agent(s, { agentId: id("agent"), parentId: parent.id, goal, model }),
       prepare(parent, child, request) {
         h.subagentWorkspace.prepare(s, parent, child, request);
+        const images = h.delivery.assign(s, parent, child, request.images ?? []);
         h.context.add(s, child, [
           {
             role: "user",
@@ -24,6 +25,7 @@ export function createSupervisor(h, s) {
               background: child.delegation.background,
               expectedOutput: child.delegation.expectedOutput,
               materials: child.delegation.materials,
+              images,
             }),
           },
         ]);

@@ -7,6 +7,11 @@ import {
   type Workspace,
 } from './components/runtime-settings';
 import { WorkspaceChanges } from './components/workspace-changes';
+import {
+  DeliveryPanel,
+  DeliverySettings,
+  type DeliveryState,
+} from './components/delivery';
 import { CompanionWidget } from './components/companion';
 import { CompletionReview } from './components/completion-review';
 import type { CompletionRecord } from '../../server/runtime/contracts.ts';
@@ -74,6 +79,9 @@ type Profile = {
 };
 type Scenario = { id: string; name: string; subtitle: string; prompt: string };
 type Agent = {
+  imageModelId?: string;
+  pendingModel?: string;
+  assignedImageIds?: string[];
   id: string;
   parentId: string | null;
   goal: string;
@@ -94,6 +102,7 @@ type Agent = {
     permissionMode: string;
     instructions: string;
     tools: string[];
+    allowedModels?: string[];
     version: string;
   };
   output?: { resultId: string; cleanup: string };
@@ -139,6 +148,7 @@ type EventItem = {
   data: Record<string, unknown>;
 };
 type Session = {
+  delivery?: DeliveryState;
   workspaceId?: string;
   workspace?: string;
   permissionMode?: string;
@@ -186,6 +196,7 @@ type CatalogItem = {
   parameters?: unknown;
 };
 type Config = {
+  imageModels?: { id: string; name: string; model: string }[];
   workspaces?: Workspace[];
   models: Profile[];
   assistants?: {
@@ -338,7 +349,8 @@ export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [draft, setDraft] = useState('');
   const [model, setModel] = useState('demo-balanced');
-  const [mode, setMode] = useState('steer');
+  const [mode, setMode] = useState('append');
+  const [messageTarget, setMessageTarget] = useState('main');
   const [tab, setTab] = useState('agents');
   const [busy, setBusy] = useState(false);
   const [inspectOpen, setInspectOpen] = useState(false);
@@ -350,6 +362,7 @@ export default function Home() {
   const [workspaceId, setWorkspaceId] = useState('');
   const [permissionMode, setPermissionMode] = useState('ask');
   const [changesOpen, setChangesOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [fullPermissionOpen, setFullPermissionOpen] = useState(false);
   const refreshConfig = () =>
     api<Config>('/config').then(setConfig).catch(fail);
@@ -375,14 +388,27 @@ export default function Home() {
   const endRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const refreshList = useCallback(
-    () => api<typeof sessions>('/sessions').then(setSessions),
+    () =>
+      api<typeof sessions>('/sessions').then((items) => {
+        setSessions(items);
+        return items;
+      }),
     [],
   );
   const fail = (e: unknown) =>
     setError(e instanceof Error ? e.message : String(e));
   useEffect(() => {
     api<Config>('/config').then(setConfig).catch(fail);
-    refreshList().catch(fail);
+    refreshList()
+      .then((items) => {
+        const saved = localStorage.getItem('harness.selected-session');
+        const found = items.find((item) => item.id === saved);
+        if (found) {
+          setSelected(found.id);
+          setWorkspaceId(found.workspaceId ?? '');
+        }
+      })
+      .catch(fail);
   }, [refreshList]);
   useEffect(() => {
     if (!selected) return;
@@ -453,6 +479,9 @@ export default function Home() {
     setStreaming('');
     setConnected(false);
     setSelected(id);
+    setMessageTarget('main');
+    if (id) localStorage.setItem('harness.selected-session', id);
+    else localStorage.removeItem('harness.selected-session');
     if (id)
       setWorkspaceId(sessions.find((s) => s.id === id)?.workspaceId ?? '');
     void api('/companion/focus', { sessionId: id }).catch(fail);
@@ -485,7 +514,11 @@ export default function Home() {
     setBusy(true);
     setError('');
     try {
-      await api(`/sessions/${selected}/messages`, { text: draft, mode });
+      await api(`/sessions/${selected}/messages`, {
+        text: draft,
+        mode,
+        agentId: messageTarget,
+      });
       setDraft('');
     } catch (e) {
       fail(e);
@@ -674,6 +707,15 @@ export default function Home() {
             >
               <Activity size={14} /> {inspectOpen ? '收起详情' : '运行详情'}
             </Button>
+            {session && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setDeliveryOpen(true)}
+              >
+                图片与网站
+              </Button>
+            )}
             {session && (
               <Button
                 size="sm"
@@ -960,6 +1002,28 @@ export default function Home() {
             )}
             <div className="composer-wrap">
               <div className="composer">
+                {session &&
+                  Object.values(session.agents).some(
+                    (a) => a.parentId && activeStates.includes(a.status),
+                  ) && (
+                    <select
+                      className="permission-control"
+                      aria-label="补充消息发给谁"
+                      value={messageTarget}
+                      onChange={(e) => setMessageTarget(e.target.value)}
+                    >
+                      <option value="main">发给主助手，由它安排</option>
+                      {Object.values(session.agents)
+                        .filter(
+                          (a) => a.parentId && activeStates.includes(a.status),
+                        )
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            只发给：{a.goal.slice(0, 35)}
+                          </option>
+                        ))}
+                    </select>
+                  )}
                 <Textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
@@ -1175,6 +1239,14 @@ export default function Home() {
                                   ?.label ?? a.model}
                               </span>
                               <span>轮次 {a.epoch}</span>
+                              {a.pendingModel && (
+                                <span>
+                                  等待切换到{' '}
+                                  {config?.models.find(
+                                    (m) => m.id === a.pendingModel,
+                                  )?.label ?? a.pendingModel}
+                                </span>
+                              )}
                               {a.delegation && (
                                 <span>
                                   {a.delegation.mode === 'foreground'
@@ -1194,6 +1266,12 @@ export default function Home() {
                                     .map((m) => m.path)
                                     .join('、') || '未分配文件'}
                                 </p>
+                                {!!a.assignedImageIds?.length && (
+                                  <p>
+                                    已分配 {a.assignedImageIds.length}{' '}
+                                    个图片版本供此助手使用。
+                                  </p>
+                                )}
                                 <p>
                                   {a.delegation.workspaceMode === 'outputs'
                                     ? '读取分配材料，可申请在自己的 outputs 目录生成文件。'
@@ -1228,6 +1306,77 @@ export default function Home() {
                                 查看结果
                                 <ChevronRight size={13} />
                               </button>
+                            )}
+                            {a.parentId && (
+                              <div className="child-actions">
+                                {!!config?.imageModels?.length &&
+                                  activeStates.includes(a.status) && (
+                                    <select
+                                      aria-label={`切换出图模型：${a.goal}`}
+                                      value={a.imageModelId ?? ''}
+                                      onChange={(e) =>
+                                        void command(
+                                          'agents/' + a.id + '/image-model',
+                                          { modelId: e.target.value },
+                                        )
+                                      }
+                                    >
+                                      <option value="" disabled>
+                                        选择此助手的出图模型
+                                      </option>
+                                      {config.imageModels.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                          {m.name} · {m.model}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                {activeStates.includes(a.status) ? (
+                                  <select
+                                    aria-label={`切换子助手模型：${a.goal}`}
+                                    value={a.model}
+                                    onChange={(e) =>
+                                      void command(
+                                        'agents/' + a.id + '/model',
+                                        { model: e.target.value },
+                                      )
+                                    }
+                                  >
+                                    {config?.models
+                                      .filter(
+                                        (m) =>
+                                          m.configured &&
+                                          (!a.delegation?.allowedModels ||
+                                            a.delegation.allowedModels.includes(
+                                              m.id,
+                                            )),
+                                      )
+                                      .map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                          {m.label}
+                                        </option>
+                                      ))}
+                                  </select>
+                                ) : (
+                                  a.output && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        void command(
+                                          'agents/' + a.id + '/retry',
+                                          {
+                                            message: childDraft || a.goal,
+                                            model,
+                                          },
+                                        )
+                                      }
+                                    >
+                                      重做此任务
+                                    </Button>
+                                  )
+                                )}
+                              </div>
                             )}
                             {a.parentId && activeStates.includes(a.status) && (
                               <div className="child-actions">
@@ -1847,9 +1996,29 @@ export default function Home() {
         <DialogContent className="settings-dialog">
           <DialogHeader>
             <DialogTitle>模型与运行设置</DialogTitle>
-            <DialogDescription>配置 API、模型能力与连接测试</DialogDescription>
+            <DialogDescription>
+              配置对话模型、出图服务与网站发布
+            </DialogDescription>
           </DialogHeader>
           <RuntimeSettings onChanged={refreshConfig} />
+          <DeliverySettings onChanged={refreshConfig} />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
+        <DialogContent className="settings-dialog">
+          <DialogHeader>
+            <DialogTitle>图片与网站</DialogTitle>
+            <DialogDescription>
+              查看图片版本、预览页面，并决定是否发布
+            </DialogDescription>
+          </DialogHeader>
+          {selected && session?.delivery && (
+            <DeliveryPanel
+              key={selected}
+              sessionId={selected}
+              state={session.delivery}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </SidebarProvider>

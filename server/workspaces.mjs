@@ -3,9 +3,10 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { HarnessError, id, now, safePath } from "./core.mjs";
 import { privateJson } from "./settings/models.mjs";
+import { photoPath } from "./privacy-policy.mjs";
 
 export const excludedPath = (file) =>
-  file
+  photoPath(file) || file
     .split(/[\\/]/)
     .some(
       (p) =>
@@ -73,6 +74,7 @@ export class WorkspaceManager {
     if (typeof directory !== "string" || !path.isAbsolute(directory))
       problem("INVALID_ARGUMENT", "请选择本机文件夹或填写绝对路径");
     const target = fs.realpathSync(directory);
+    if (photoPath(target)) problem("POLICY_DENIED", "不能将私人相册设为模型工作区");
     if (!fs.statSync(target).isDirectory() || target === path.parse(target).root)
       problem("INVALID_ARGUMENT", "不能使用此工作目录");
     if (this.protectedRoots.some((p) => target === p || target.startsWith(p + path.sep)))
@@ -320,14 +322,19 @@ export class WorkspaceManager {
     const b = this.git(this.get(wid), ["cat-file", "blob", entry.oid]);
     return b.includes(0) ? "[二进制文件]" : b.toString().slice(0, 30000);
   }
-  rollback(wid, sid, rid) {
+  rollback(wid, sid, rid, paths) {
     if (this.owners.has(wid)) problem("WORKSPACE_BUSY", "请先停止工作区内正在执行的任务");
     const rounds = this.records(wid),
       round = rounds.find((r) => r.id === rid && r.sessionId === sid);
     if (!round?.after || round.revertedAt) problem("INVALID_ARGUMENT", "记录不可撤销");
+    const available = round.changes.filter(c => !(round.revertedPaths ?? []).includes(c.path));
+    if (paths !== undefined && (!Array.isArray(paths) || !paths.length || paths.some(p => typeof p !== "string" || !available.some(c => c.path === p))))
+      problem("INVALID_ARGUMENT", "请选择本轮尚未撤销的文件");
+    const changes = paths ? available.filter(c => paths.includes(c.path)) : available;
+    if (!changes.length) problem("INVALID_ARGUMENT", "没有可撤销的文件");
     const w = this.get(wid),
       conflicts = [];
-    for (const c of round.changes) {
+    for (const c of changes) {
       const file = safePath(w.path, c.path);
       const expected = round.after.manifest[c.path];
       const exists = fs.lstatSync(file, { throwIfNoEntry: false });
@@ -347,8 +354,8 @@ export class WorkspaceManager {
     if (conflicts.length)
       problem("ROLLBACK_CONFLICT", "文件已有后续修改，撤销冲突；没有覆盖文件", { conflicts });
     const backup = this.snapshot(wid, "Before rollback " + rid);
-    privateJson(path.join(this.root, wid, "rollback-pending.json"), { roundId: rid, backup });
-    for (const c of round.changes) {
+    privateJson(path.join(this.root, wid, "rollback-pending.json"), { roundId: rid, paths: changes.map(c => c.path), backup });
+    for (const c of changes) {
       const file = safePath(w.path, c.path),
         original = round.before.manifest[c.path];
       if (!original) fs.rmSync(file);
@@ -361,10 +368,11 @@ export class WorkspaceManager {
       }
     }
     const restored = this.snapshot(wid, "Rollback " + rid);
-    round.revertedAt = now();
+    round.revertedPaths = [...(round.revertedPaths ?? []), ...changes.map(c => c.path)];
+    if (round.revertedPaths.length === round.changes.length) round.revertedAt = now();
     round.rollbackCommit = restored.commit;
     this.saveRecords(wid, rounds);
     fs.rmSync(path.join(this.root, wid, "rollback-pending.json"));
-    return { roundId: rid, commit: restored.commit, changes: round.changes };
+    return { roundId: rid, commit: restored.commit, changes };
   }
 }

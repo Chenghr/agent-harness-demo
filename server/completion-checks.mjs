@@ -67,6 +67,7 @@ export class CompletionChecks {
       s.acceptance,
       a.delegation?.inputVersion,
       a.outputRevision,
+      this.harness.delivery?.state(s).version,
       hash.digest("hex"),
     ]);
   }
@@ -81,6 +82,14 @@ export class CompletionChecks {
       return reviewRequired(
         "后台结果已返回，内容作为待核实资料交给主助手；尚未配置该子任务的自动验收标准。",
       );
+    const delivery = this.harness.delivery?.state(s);
+    if (delivery?.requirements) {
+      const preview = delivery.previews.at(-1);
+      if (!preview?.members) return result([check("网站预览", false, "尚未生成包含全部成员的祝福网站预览")]);
+      try { this.harness.delivery.assertFresh(s, preview); }
+      catch (error) { return result([check("网站预览版本", false, error.message)]); }
+      return { verdict: "review", summary: "成员与字数检查通过，请预览画面。网站发布仍需单独批准。", checks: [check("成员和祝福", true, `${preview.members.length} 位成员，已按用户名单与字数要求检查`), { name: "画面与内容质量", status: "unknown", detail: "请用户在预览中确认形象、风格和祝福内容" }] };
+    }
     const policy = s.acceptance;
     if (!policy || policy.kind === "manual" || s.revision !== policy.requirementRevision)
       return reviewRequired(

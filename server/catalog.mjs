@@ -1,4 +1,5 @@
 import { WORKSPACE_TOOLS } from "./workspace-tools.mjs";
+import { DELIVERY_TOOLS } from "./delivery/tools.mjs";
 import { configuredCommands } from "./command-tools.mjs";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -34,6 +35,7 @@ const tool = (name, title, description, parameters, extra = {}) => ({
 
 export const CORE_TOOLS = [
   ...WORKSPACE_TOOLS,
+  ...DELIVERY_TOOLS,
   tool(
     "catalog_browse",
     "打开分类目录",
@@ -173,13 +175,14 @@ export const CORE_TOOLS = [
   tool(
     "agent_spawn",
     "创建子助手",
-    "创建子助手。默认通用助手，可接临时任务；只分配独立且值得分工的工作。files/artifacts 明确提供材料，未提供则不复制文件。后台立即返回编号；前台等待结果。",
+    "创建子助手。默认通用助手，可接临时任务；只分配独立且值得分工的工作。files/artifacts/images 明确提供文件、产物、图片版本，未提供则不自动共享。后台立即返回编号；前台等待结果。",
     schema(
       {
         goal: str("子任务目标", 2000),
         type: str("助手类型，省略为 general", 100),
         files: { type: "array", items: str("分配的工作目录相对文件路径", 500) },
         artifacts: { type: "array", items: str("分配的产物编号", 100) },
+        images: { type: "array", maxItems: 40, items: str("明确分配的图片版本 ID", 100) },
         background: str("必要背景", 3000),
         expectedOutput: str("预期产出", 2000),
         reason: str("简短分工理由", 500),

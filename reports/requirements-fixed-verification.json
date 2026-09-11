@@ -1,0 +1,28 @@
+{
+  "verifiedAt": "2026-09-11T07:03:10.984140+00:00",
+  "baseCommit": "797e20728333641e19641927da366ad0a4a39125",
+  "workingTreeChangesIncluded": true,
+  "platform": "macOS",
+  "node": "v24.19.0",
+  "tests": {
+    "tests": 169,
+    "pass": 169,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "lint": "passed",
+  "runtimeTypecheck": "passed",
+  "frontendTypecheck": "passed",
+  "build": "passed",
+  "scale": {
+    "fixtureCalls": 1005,
+    "status": "passed",
+    "realDispatch": true,
+    "realModel": false
+  },
+  "browser": "requirements-fixed-browser.json",
+  "realImageProviderTested": false,
+  "realPublicDeploymentPerformed": false,
+  "servingAt": "http://127.0.0.1:4317/"
+}
