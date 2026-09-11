@@ -1,0 +1,21 @@
+{
+  "counts": {
+    "tools": 1223,
+    "skills": 1207,
+    "realTools": 23,
+    "fixtureTools": 1200,
+    "authoredSkills": 7,
+    "generatedSkills": 1200
+  },
+  "setupMs": 679,
+  "rootEntries": 3,
+  "rootTokens": 501,
+  "rootReadMs": 19.43,
+  "searchMatches": 397,
+  "searchMs": 148.49,
+  "actualSkillLoads": 1001,
+  "loadAndUnloadMs": 14436,
+  "activeSkillsAfter": 0,
+  "simulatedContent": true,
+  "meaning": "测量真实目录与加载机制；方法内容为教学生成样本，不代表 1001 种方法的业务质量"
+}

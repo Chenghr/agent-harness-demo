@@ -1,0 +1,58 @@
+{
+  "recordedAt": "2026-09-11T01:05:41.373Z",
+  "tests": {
+    "total": 133,
+    "passed": 133,
+    "failed": 0,
+    "log": "final-tests.txt"
+  },
+  "checks": {
+    "runtimeTypecheck": "passed",
+    "frontendTypecheck": "passed",
+    "lint": "passed",
+    "frontendBuild": "passed",
+    "macOSBuild": "passed"
+  },
+  "scale": {
+    "createdAt": "2026-09-11T00:27:42.660Z",
+    "mode": "deterministic-model-and-fixture-data / real harness dispatch",
+    "node": "v24.19.0",
+    "durationMs": 149932,
+    "catalog": {
+      "tools": 1223,
+      "skills": 1207,
+      "realTools": 23,
+      "fixtureTools": 1200,
+      "authoredSkills": 7,
+      "generatedSkills": 1200
+    },
+    "fixtureCalls": 1005,
+    "totalCalls": 1016,
+    "failed": 0,
+    "compactions": 69,
+    "retainedActions": 200,
+    "liveResources": 0,
+    "context": 12216,
+    "limitations": [
+      "不代表 1000 个真实外部服务",
+      "不代表千级并发",
+      "不代表真实模型长程任务质量"
+    ],
+    "longRunMs": 24705,
+    "distinctToolsLoadedExecutedUnloaded": 1200,
+    "distinctSkillsLoadedUnloaded": 1207,
+    "catalogProbeMode": "sequential runtime broker calls, without model inference",
+    "catalogProbeErrors": 0
+  },
+  "manualUI": [
+    "工作台首页与运行详情",
+    "隐私实体示例授权、生成和成果检查",
+    "宠物独立查询、证据展开、反馈对象选择、鸡蛋反馈",
+    "macOS 浮窗打开、收起、重新展开、退出"
+  ],
+  "notVerified": [
+    "真实模型服务上的回答和摘要质量",
+    "窗口拖动、跨显示器与多空间的完整兼容性",
+    "恶意代码的操作系统隔离"
+  ]
+}

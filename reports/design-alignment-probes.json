@@ -1,0 +1,18 @@
+{
+  "purpose": "design-gap reproduction, not acceptance tests",
+  "childFailureDelivery": {
+    "childFailed": true,
+    "pendingMessagesAfterFailure": 0,
+    "mainModelCalls": 1,
+    "parentStatus": "completed"
+  },
+  "toolVersionBinding": {
+    "loadedVersion": "1",
+    "subsequentDefinitionVersion": "2",
+    "oldArgumentsRejectedWith": "INVALID_ARGUMENT"
+  },
+  "skillResourceBinding": {
+    "skillBodySnapshotVersion": "1",
+    "changedResourceVisibleWithoutReload": true
+  }
+}

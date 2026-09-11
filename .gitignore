@@ -1,0 +1,17 @@
+node_modules/
+*.tsbuildinfo
+.harness/
+.env
+.env.*
+!.env.example
+web/dist/
+web/.next/
+web/.wrangler/
+coverage/
+dist/
+*.log
+.DS_Store
+
+.desktop/
+delivery/
+web/.vinext/

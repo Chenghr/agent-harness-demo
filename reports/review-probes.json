@@ -1,0 +1,50 @@
+{
+  "purpose": "defect reproduction, not acceptance tests",
+  "results": [
+    {
+      "name": "append message can remain unread when final model response arrives",
+      "confirmed": true,
+      "status": "completed",
+      "modelRequests": 1,
+      "unreadMessages": 1
+    },
+    {
+      "name": "medium sized file is clipped without a retrievable artifact",
+      "confirmed": true,
+      "fileCharacters": 5012,
+      "returnedCharacters": 2438,
+      "artifactCount": 0
+    },
+    {
+      "name": "normal command exit can leave a same-group background descendant alive",
+      "confirmed": true,
+      "parentExitCode": 0,
+      "trackedResources": 0,
+      "descendantStillAlive": true
+    },
+    {
+      "name": "handoff excludes older uncompressed evidence",
+      "confirmed": true,
+      "originalEvidenceOnDisk": true,
+      "evidenceInHandoff": false
+    },
+    {
+      "name": "an active oldest action prevents pruning completed action history",
+      "confirmed": true,
+      "retainedActions": 221,
+      "documentedHistoryTarget": 200
+    },
+    {
+      "name": "resource aliases bypass the agents directory write rule",
+      "confirmed": true,
+      "acceptedAlias": "./agents/review-child/cart.mjs"
+    },
+    {
+      "name": "failed child setup leaves an idle child with no controller",
+      "confirmed": true,
+      "childStatusBeforeCleanup": "idle",
+      "controllers": 0,
+      "parentWaitsWithoutController": true
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "text_count",
+  "title": "文本字符统计",
+  "description": "对已提供的文本统计字符数和行数；固定本地 Node 命令，不读取外部文件或联网。",
+  "script": "text-count.mjs",
+  "parameters": {
+    "type": "object",
+    "properties": { "text": { "type": "string", "maxLength": 10000 } },
+    "required": ["text"],
+    "additionalProperties": false
+  }
+}

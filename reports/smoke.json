@@ -1,0 +1,13 @@
+{
+  "createdAt": "2026-09-09T17:21:06.244Z",
+  "base": "http://127.0.0.1:4317",
+  "staticAssets": 7,
+  "scenario": "full",
+  "status": "completed",
+  "toolCalls": 23,
+  "testsBefore": 1,
+  "testsAfter": 0,
+  "liveResources": 0,
+  "modelHandoffs": 1,
+  "browserInteractionTested": false
+}

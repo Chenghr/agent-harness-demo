@@ -1,0 +1,580 @@
+.cap-app {
+  --cap-ink: #202724;
+  --cap-muted: #737b76;
+  --cap-border: #e1e6e2;
+  display: flex;
+  min-height: 100vh;
+  background: #fafbf9;
+  color: var(--cap-ink);
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.cap-app * {
+  box-sizing: border-box;
+}
+.cap-app button,
+.cap-app input,
+.cap-app select,
+.cap-app textarea {
+  font: inherit;
+}
+.cap-app button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  border: 1px solid var(--cap-border);
+  border-radius: 7px;
+  background: white;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+.cap-app button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cap-app button:hover:not(:disabled) {
+  background: #eef3ee;
+}
+.cap-app button:focus-visible,
+.cap-app a:focus-visible,
+.cap-app input:focus-visible,
+.cap-app textarea:focus-visible,
+.cap-app select:focus-visible {
+  outline: 2px solid #426d52;
+  outline-offset: 2px;
+}
+.cap-app .cap-primary {
+  background: #304f3b;
+  color: white;
+  border-color: #304f3b;
+}
+.cap-app .cap-primary:hover:not(:disabled) {
+  background: #253e2e;
+}
+.cap-app h1,
+.cap-app h2,
+.cap-app h3,
+.cap-app h4,
+.cap-app p {
+  margin: 0;
+}
+.cap-app h2 {
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.cap-app h3 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.cap-app h4 {
+  font-size: 14px;
+  margin: 18px 0 8px;
+}
+.cap-app p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cap-app small {
+  font-size: 12px;
+  color: var(--cap-muted);
+}
+.cap-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--cap-border);
+  padding: 24px 18px;
+  background: #f3f5f1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+.cap-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #66726a;
+  text-decoration: none;
+  margin-bottom: 32px;
+}
+.cap-sidebar h1 {
+  font-size: 21px;
+  font-weight: 600;
+  padding-left: 8px;
+}
+.cap-sidebar > p {
+  font-size: 12px;
+  color: var(--cap-muted);
+  padding: 4px 8px;
+}
+.cap-sidebar nav {
+  display: grid;
+  gap: 6px;
+  margin: 26px 0 20px;
+}
+.cap-sidebar nav button {
+  border: 0;
+  background: transparent;
+  justify-content: flex-start;
+}
+.cap-sidebar nav span {
+  margin-left: auto;
+  font-size: 12px;
+}
+.cap-app .chosen {
+  background: #e0e9df !important;
+  color: #294731 !important;
+}
+.cap-tree {
+  overflow: auto;
+  flex: 1;
+  border-top: 1px solid var(--cap-border);
+  padding-top: 12px;
+}
+.cap-tree summary {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+}
+.cap-tree summary::before {
+  content: '›';
+  padding-left: 3px;
+}
+.cap-tree details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.cap-tree summary button {
+  border: 0;
+  background: transparent;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  white-space: normal;
+  text-align: left;
+  justify-content: flex-start;
+  font-size: 12px;
+  flex: 1;
+}
+.cap-sidebar .cap-footnote {
+  padding-top: 20px;
+  line-height: 1.7;
+}
+.cap-main {
+  padding: 34px 44px 70px;
+  flex: 1;
+  max-width: 1300px;
+  min-width: 0;
+}
+.cap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.cap-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8b978e;
+  letter-spacing: 2px;
+}
+.cap-model {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: var(--cap-muted);
+  margin-bottom: 20px;
+}
+.cap-app select,
+.cap-app textarea,
+.cap-app input:not([type='checkbox']) {
+  border: 1px solid var(--cap-border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 8px 10px;
+  min-width: 0;
+  color: var(--cap-ink);
+}
+.cap-model select {
+  max-width: 370px;
+  font-size: 12px;
+}
+.cap-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 15px 0;
+  color: var(--cap-muted);
+}
+.cap-breadcrumb span {
+  display: flex;
+  align-items: center;
+}
+.cap-breadcrumb button {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+.cap-overview {
+  padding: 22px 25px;
+  border: 1px solid var(--cap-border);
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 24px;
+}
+.cap-overview > p {
+  margin: 13px 0;
+  color: #59655d;
+  line-height: 1.9;
+  font-size: 13px;
+  max-height: 260px;
+  overflow: auto;
+}
+.cap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cap-row > div {
+  display: flex;
+  gap: 8px;
+}
+.cap-row button {
+  font-size: 12px;
+}
+.cap-row > div:has(h2) {
+  display: block;
+}
+.cap-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  margin-bottom: 14px;
+}
+.cap-search input {
+  flex: 1;
+}
+.cap-toolbar {
+  color: var(--cap-muted);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.cap-entries {
+  border-top: 1px solid var(--cap-border);
+}
+.cap-entries article {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 8px;
+  border-bottom: 1px solid var(--cap-border);
+}
+.cap-app .cap-entry {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  white-space: normal;
+}
+.cap-entry strong {
+  font-weight: 550;
+  color: #243a2c;
+}
+.cap-entry p {
+  font-size: 12px;
+  color: var(--cap-muted);
+  margin-top: 5px;
+  line-height: 1.7;
+}
+.cap-folder {
+  color: #7b9480;
+  flex-shrink: 0;
+}
+.cap-tag {
+  font-size: 11px;
+  white-space: nowrap;
+  color: #7f8881;
+  background: #f0f3ef;
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.cap-pagination {
+  margin-top: 22px;
+  color: var(--cap-muted);
+  font-size: 12px;
+}
+.cap-empty {
+  padding: 40px 15px;
+  color: var(--cap-muted);
+  text-align: center;
+}
+.cap-new-directory {
+  margin-top: 24px;
+  color: var(--cap-muted);
+  font-size: 12px;
+}
+.cap-app summary {
+  cursor: pointer;
+}
+.cap-card {
+  padding: 22px;
+  border: 1px solid var(--cap-border);
+  border-radius: 9px;
+  background: #fff;
+  margin: 18px 0;
+}
+.cap-card progress {
+  width: 100%;
+  height: 5px;
+  accent-color: #476e52;
+  margin: 16px 0;
+}
+.cap-card > p {
+  margin: 8px 0;
+  color: var(--cap-muted);
+}
+.cap-intro {
+  color: #657169;
+  padding: 12px 0;
+  font-size: 13px;
+}
+.cap-conflict,
+.cap-finding {
+  border-left: 2px solid #c39c55;
+  background: #faf8f2;
+  margin: 14px 0;
+  padding: 12px 16px;
+}
+.cap-app blockquote {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: #6a716b;
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: #f3f5f1;
+  border-radius: 4px;
+}
+.cap-form {
+  display: grid;
+  gap: 15px;
+  margin-top: 18px;
+}
+.cap-form label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  color: #687269;
+}
+.cap-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+.cap-form > button {
+  justify-self: start;
+}
+.cap-form .cap-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cap-app .cap-warning {
+  color: #976427;
+  font-size: 12px;
+  margin: 12px 0;
+}
+.cap-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 15px;
+  border: 1px solid #eedacb;
+  border-radius: 6px;
+  background: #fff7f1;
+  color: #9d512a;
+  margin: 10px 0;
+}
+.cap-alert button {
+  border: 0;
+  background: transparent;
+}
+.cap-notice {
+  background: #eef5ec;
+  padding: 12px 15px;
+  border-radius: 6px;
+  color: #3c6545;
+  margin: 12px 0 !important;
+}
+.cap-overlay {
+  position: fixed;
+  inset: 0;
+  background: #15281f40;
+  backdrop-filter: blur(2px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+}
+.cap-modal,
+.cap-detail {
+  background: white;
+  border: 1px solid var(--cap-border);
+  border-radius: 13px;
+  width: 650px;
+  max-width: 100%;
+  max-height: 92vh;
+  overflow: auto;
+  padding: 30px;
+  box-shadow: 0 20px 90px #16291f26;
+}
+.cap-detail {
+  width: 850px;
+}
+.cap-modal > p,
+.cap-detail > p {
+  font-size: 13px;
+  color: var(--cap-muted);
+  margin: 16px 0;
+}
+.cap-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--cap-border);
+  padding-bottom: 12px;
+  margin: 18px 0;
+}
+.cap-tabs button {
+  border: 0;
+  font-size: 13px;
+}
+.cap-detail pre {
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #f5f6f3;
+  border: 1px solid var(--cap-border);
+  padding: 18px;
+  border-radius: 6px;
+  max-height: 450px;
+  overflow: auto;
+}
+.cap-detail details {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--cap-border);
+}
+.cap-meta {
+  overflow-wrap: anywhere;
+}
+.cap-grade {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--cap-border);
+}
+.cap-grade > strong {
+  display: flex;
+  justify-content: space-between;
+}
+.cap-grade p {
+  font-size: 13px;
+  color: #737d75;
+  margin-top: 8px;
+}
+.cap-finding small {
+  display: block;
+  margin-top: 5px;
+}
+@media (max-width: 1000px) {
+  .cap-main {
+    padding: 24px;
+  }
+  .cap-sidebar {
+    width: 220px;
+  }
+  .cap-tag {
+    max-width: 100px;
+    white-space: normal;
+  }
+  .cap-model {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 720px) {
+  .cap-app {
+    display: block;
+  }
+  .cap-sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    padding: 15px;
+  }
+  .cap-sidebar h1,
+  .cap-sidebar > p,
+  .cap-tree {
+    display: none;
+  }
+  .cap-back {
+    margin: 0 0 10px;
+  }
+  .cap-sidebar nav {
+    display: flex;
+    margin: 0;
+  }
+  .cap-main {
+    padding: 20px 14px;
+  }
+  .cap-model {
+    display: block;
+  }
+  .cap-overlay {
+    padding: 10px;
+  }
+  .cap-modal,
+  .cap-detail {
+    padding: 20px;
+  }
+  .cap-tabs {
+    flex-wrap: wrap;
+  }
+  .cap-header h2 {
+    font-size: 21px;
+  }
+}
+
+.cap-pending-materials {
+  margin: 12px 0;
+}
+.cap-pending-materials pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 360px;
+  overflow: auto;
+  padding: 14px;
+  background: #f4f6f2;
+  font-size: 12px;
+}
+.cap-pending-materials > button {
+  margin-right: 8px;
+}
+.cap-notice {
+  display: block;
+}

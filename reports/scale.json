@@ -1,0 +1,31 @@
+{
+  "createdAt": "2026-09-11T00:27:42.660Z",
+  "mode": "deterministic-model-and-fixture-data / real harness dispatch",
+  "node": "v24.19.0",
+  "durationMs": 149932,
+  "catalog": {
+    "tools": 1223,
+    "skills": 1207,
+    "realTools": 23,
+    "fixtureTools": 1200,
+    "authoredSkills": 7,
+    "generatedSkills": 1200
+  },
+  "fixtureCalls": 1005,
+  "totalCalls": 1016,
+  "failed": 0,
+  "compactions": 69,
+  "retainedActions": 200,
+  "liveResources": 0,
+  "context": 12216,
+  "limitations": [
+    "不代表 1000 个真实外部服务",
+    "不代表千级并发",
+    "不代表真实模型长程任务质量"
+  ],
+  "longRunMs": 24705,
+  "distinctToolsLoadedExecutedUnloaded": 1200,
+  "distinctSkillsLoadedUnloaded": 1207,
+  "catalogProbeMode": "sequential runtime broker calls, without model inference",
+  "catalogProbeErrors": 0
+}
