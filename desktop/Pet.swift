@@ -31,21 +31,26 @@ final class PetApp: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKN
         window.makeKeyAndOrderFront(nil)
         web.load(URLRequest(url:baseURL))
         menuItem = NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
-        menuItem.button?.title = "小伴"
+        menuItem.button?.title = "小艺"
         let menu = NSMenu()
-        menu.addItem(withTitle:"显示小伴",action:#selector(showPet),keyEquivalent:"").target = self
-        menu.addItem(withTitle:"收起小伴",action:#selector(hidePet),keyEquivalent:"").target = self
+        menu.addItem(withTitle:"显示小艺",action:#selector(showPet),keyEquivalent:"").target = self
+        menu.addItem(withTitle:"收起小艺",action:#selector(hidePet),keyEquivalent:"").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle:"退出小伴",action:#selector(quit),keyEquivalent:"q").target = self
+        menu.addItem(withTitle:"退出小艺",action:#selector(quit),keyEquivalent:"q").target = self
         menuItem.menu = menu
         NSApp.activate(ignoringOtherApps:true)
     }
     @objc func showPet() { window.orderFrontRegardless() }
     @objc func hidePet() { window.orderOut(nil) }
     @objc func quit() { NSApp.terminate(nil) }
-    func resize(expanded: Bool) {
+    func resize(mode: String) {
         let old = window.frame
-        let size = expanded ? NSSize(width:400,height:740) : NSSize(width:280,height:180)
+        let size: NSSize
+        switch mode {
+        case "expanded": size = NSSize(width:400,height:740)
+        case "peek": size = NSSize(width:380,height:300)
+        default: size = NSSize(width:280,height:180)
+        }
         let visible = window.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
         let x = max(visible.minX,min(old.maxX-size.width,visible.maxX-size.width))
         let y = max(visible.minY,min(old.minY,visible.maxY-size.height))
@@ -57,8 +62,9 @@ final class PetApp: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKN
               message.frameInfo.securityOrigin.port == baseURL.port,
               let action = message.body as? String else { return }
         switch action {
-        case "expand": resize(expanded:true)
-        case "collapse": resize(expanded:false)
+        case "expand": resize(mode:"expanded")
+        case "peek": resize(mode:"peek")
+        case "collapse": resize(mode:"collapsed")
         case "close": quit()
         case "open":
             var parts = URLComponents(url:baseURL,resolvingAgainstBaseURL:false)!
@@ -83,7 +89,7 @@ final class PetApp: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKN
 let args = CommandLine.arguments
 let address = args.count > 1 ? args[1] : "http://127.0.0.1:4317/pet/?native=1"
 guard let url = URL(string:address),url.scheme == "http",["127.0.0.1","localhost"].contains(url.host ?? ""),["/pet", "/pet/"].contains(url.path) else {
-    fputs("小伴只允许连接本机 /pet/ 页面。\n",stderr);exit(1)
+    fputs("小艺只允许连接本机 /pet/ 页面。\n",stderr);exit(1)
 }
 let app = NSApplication.shared
 let delegate = PetApp(url:url)

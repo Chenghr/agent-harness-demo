@@ -7,13 +7,13 @@ if (process.platform !== "darwin")
   throw new Error("桌面浮窗目前支持 macOS；其他系统可打开 /pet/ 独立网页。");
 const dir = path.join(root, ".desktop");
 fs.mkdirSync(dir, { recursive: true });
-const bundle = path.join(dir, "HarnessPet.app", "Contents");
+const bundle = path.join(dir, "YiWorkPet.app", "Contents");
 fs.mkdirSync(path.join(bundle, "MacOS"), { recursive: true });
 fs.writeFileSync(
   path.join(bundle, "Info.plist"),
-  `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.harness.companion</string><key>CFBundleName</key><string>HarnessPet</string><key>CFBundleExecutable</key><string>HarnessPet</string><key>CFBundleVersion</key><string>1</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/></dict></plist>`,
+  `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>work.yi.companion</string><key>CFBundleName</key><string>YiWorkPet</string><key>CFBundleExecutable</key><string>YiWorkPet</string><key>CFBundleVersion</key><string>1</string><key>LSUIElement</key><true/><key>NSHighResolutionCapable</key><true/></dict></plist>`,
 );
-const executable = path.join(bundle, "MacOS", "HarnessPet");
+const executable = path.join(bundle, "MacOS", "YiWorkPet");
 const built = spawnSync(
   "swiftc",
   [
@@ -31,7 +31,7 @@ const built = spawnSync(
 );
 if (built.status !== 0) process.exit(built.status ?? 1);
 if (process.argv.includes("--build-only")) {
-  console.log("桌面小伴已编译：" + executable);
+  console.log("桌面小艺已编译：" + executable);
   process.exit(0);
 }
 const port = Number(process.env.PORT || 4317);

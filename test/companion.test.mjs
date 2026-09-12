@@ -37,6 +37,30 @@ test("companion reads archived evidence without changing the main task", async (
   );
   assert.equal(h.companion.snapshot(s.id).messages.length, 2);
 });
+test("BTW casual chat stays separate and never reads or changes the main task", async (t) => {
+  const { h, s } = setup(t);
+  h.context.add(s, s.agents.main, [{ role: "assistant", content: "主任务私有证据 A17" }]);
+  const before = JSON.stringify({
+    history: s.agents.main.history,
+    chat: s.chat,
+    revision: s.revision,
+    status: s.status,
+  });
+  const reply = await h.companion.ask(s.id, { text: "1 加 1 等于几？", mode: "casual" });
+  assert.match(reply.text, /= 2/);
+  assert.equal(reply.mode, "casual");
+  assert.deepEqual(reply.sources, []);
+  assert.equal(
+    JSON.stringify({
+      history: s.agents.main.history,
+      chat: s.chat,
+      revision: s.revision,
+      status: s.status,
+    }),
+    before,
+  );
+  assert.ok(h.companion.snapshot(s.id).messages.every((message) => message.mode === "casual"));
+});
 test("feedback has explicit target, model and revision; never changes acceptance", async (t) => {
   const { h, s } = setup(t);
   const reply = await h.companion.ask(s.id, { text: "进展" });
@@ -50,6 +74,7 @@ test("feedback has explicit target, model and revision; never changes acceptance
   assert.equal(feedback.model, s.model);
   assert.equal(feedback.revision, s.revision);
   assert.equal(s.status, before);
+  assert.equal(h.companion.snapshot(s.id).presence.mood, "wink");
   assert.throws(
     () => h.companion.feedback(s.id, { kind: "up", target: { type: "companion", id: "missing" } }),
     { code: "NOT_FOUND" },
@@ -57,6 +82,26 @@ test("feedback has explicit target, model and revision; never changes acceptance
   assert.equal(h.companion.export(s.id).feedback.length, 1);
   h.companion.clear(s.id);
   assert.equal(h.companion.export(s.id).feedback.length, 0);
+});
+test("companion presence maps task lifecycle to robot moods without suggesting questions", (t) => {
+  const { h, s } = setup(t);
+  let snapshot = h.companion.snapshot(s.id);
+  assert.equal(snapshot.presence.mood, "wink");
+  assert.equal("btw" in snapshot.presence, false);
+
+  s.status = "running";
+  snapshot = h.companion.snapshot(s.id);
+  assert.equal(snapshot.presence.mood, "computer");
+  assert.equal(snapshot.presence.activity, "working");
+
+  s.status = "needs_review";
+  snapshot = h.companion.snapshot(s.id);
+  assert.equal(snapshot.presence.mood, "jump");
+  assert.match(snapshot.presence.notice.text, /成果准备好了/);
+
+  s.status = "failed";
+  snapshot = h.companion.snapshot(s.id);
+  assert.equal(snapshot.presence.mood, "sad");
 });
 test("companion rejects concurrent chats and cancels owned calls", async (t) => {
   const { h, s } = setup(t);

@@ -185,7 +185,7 @@ export function createServer({
                 // Capture ownership after admission; an unrelated busy request must
                 // never cancel the first window's call when it disconnects.
                 if (harness.companion.active.has(sid))
-                  throw new HarnessError("COMPANION_BUSY", "小伴正在回答，可以先停止再提问");
+                  throw new HarnessError("COMPANION_BUSY", "小艺正在回答，可以先停止再提问");
                 const pending = harness.companion.ask(sid, body);
                 const owned = harness.companion.active.get(sid);
                 const close = () => {

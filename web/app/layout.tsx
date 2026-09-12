@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
+import './refined.css';
 
 export const metadata: Metadata = {
-  title: "Harness · 工作空间",
-  description:
-    "本地 Agent Harness 教学演示：用户打断、后台任务、按需能力加载、上下文压缩与模型交接。",
+  title: '艺工作 · AI 工作空间',
+  description: '艺工作：AI 多干活，我们少干活，让工作更简单。',
 };
 
 export default function RootLayout({

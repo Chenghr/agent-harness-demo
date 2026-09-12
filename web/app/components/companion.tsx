@@ -22,6 +22,7 @@ type PetMessage = {
   id: string;
   role: string;
   text: string;
+  mode?: 'task' | 'casual';
   model?: string;
   simulated?: boolean;
   time?: string;
@@ -30,11 +31,13 @@ type PetMessage = {
   stale?: boolean;
   sources?: Evidence[];
 };
+type PetMood = 'computer' | 'happy' | 'jump' | 'sad' | 'wink';
 type PetState = {
   progress: {
     title: string;
     status: string;
     label: string;
+    pendingApprovals: number;
     completed: number;
     failed: number;
     model: string;
@@ -42,6 +45,15 @@ type PetState = {
     lastMessage: string | null;
     latest: { id: string; tool: string; status: string } | null;
     children: { id: string; goal: string; status: string }[];
+  };
+  presence?: {
+    mood: PetMood;
+    activity: 'working' | 'chatting' | 'resting';
+    notice: {
+      id: string;
+      text: string;
+      tone: 'working' | 'success' | 'attention' | 'danger' | 'neutral';
+    };
   };
   messages: PetMessage[];
   busy: boolean;
@@ -84,63 +96,45 @@ function native(action: string) {
   };
   w.webkit?.messageHandlers?.pet?.postMessage(action);
 }
-// A small vector character belongs to this application's UI; no external sprites or runtime dependencies.
-export function PetFace({ mood = 'idle' }: { mood?: string }) {
+const petAssets: Record<PetMood, string> = {
+  computer: '/assets/pet/robot-computer.png',
+  happy: '/assets/pet/robot-happy.png',
+  jump: '/assets/pet/robot-jump.png',
+  sad: '/assets/pet/robot-sad.png',
+  wink: '/assets/pet/robot-wink.png',
+};
+const eggComfortLines = [
+  '啪！这颗我接住了，坏情绪先交给我。',
+  '再来一颗也没关系，今天先别为难自己。',
+  '都给我吧。等气消一点，我们再慢慢把事情做好。',
+];
+const slowComfortLines = [
+  '收到，我替你催一催。你不用一直盯着，先伸个懒腰。',
+  '确实等久了。时间不是你的错，我继续帮你守着进度。',
+  '催办小乌龟已经出发，有新进展我会第一时间告诉你。',
+];
+
+function fallbackMood(status?: string): PetMood {
+  if (
+    ['thinking', 'running', 'waiting', 'verifying', 'cancelling'].includes(
+      status ?? '',
+    )
+  )
+    return 'computer';
+  if (status === 'completed' || status === 'needs_review') return 'jump';
+  if (status === 'failed' || status === 'interrupted') return 'sad';
+  return 'wink';
+}
+
+export function PetFace({ mood = 'wink' }: { mood?: string }) {
+  const resolved: PetMood = mood in petAssets ? (mood as PetMood) : 'wink';
   return (
-    <svg
-      className={`pet-face pet-${mood}`}
-      viewBox="0 0 120 114"
-      aria-hidden="true"
-    >
-      <g className="pet-body">
-        <path
-          d="M27 45 Q15 12 36 24 L47 33 Q61 29 74 33 L87 22 Q104 15 94 48 Q104 65 96 85 Q88 98 62 98 Q31 99 23 83 Q17 64 27 45Z"
-          fill="#f3f0e8"
-          stroke="#42453f"
-          strokeWidth="2.4"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M34 91 Q27 110 44 106 M80 92 Q88 109 72 106"
-          fill="#f3f0e8"
-          stroke="#42453f"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-        />
-        <g className="pet-eyes">
-          <ellipse cx="44" cy="59" rx="3" ry="4" fill="#42453f" />
-          <ellipse cx="77" cy="59" rx="3" ry="4" fill="#42453f" />
-        </g>
-        <path
-          className="pet-mouth"
-          d={
-            mood === 'egg' || mood === 'failed'
-              ? 'M55 77 Q60 71 66 77'
-              : 'M55 73 Q60 79 66 73'
-          }
-          fill="none"
-          stroke="#42453f"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M28 70 L35 72 M86 72 L93 70"
-          stroke="#c8b6a1"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-        {mood === 'egg' && (
-          <g className="pet-egg-splash">
-            <path
-              d="M70 29 Q98 20 98 41 Q108 62 87 65 Q63 66 66 47 Q54 38 70 29"
-              fill="#fffdf3"
-              stroke="#ddd7c8"
-            />
-            <circle cx="84" cy="43" r="9" fill="#e8bb55" />
-          </g>
-        )}
-      </g>
-    </svg>
+    <span className={`pet-face pet-${resolved}`} aria-hidden="true">
+      <span
+        className="pet-sprite"
+        style={{ backgroundImage: `url("${petAssets[resolved]}")` }}
+      />
+    </span>
   );
 }
 function CompanionPanel({
@@ -164,15 +158,35 @@ function CompanionPanel({
     [quiet, setQuiet] = useState(false),
     [target, setTarget] = useState('task'),
     [reason, setReason] = useState(''),
-    [confirmClear, setConfirmClear] = useState(false);
-  const lifetime = useRef(new AbortController());
+    [confirmClear, setConfirmClear] = useState(false),
+    [callout, setCallout] = useState(''),
+    [btwMode, setBtwMode] = useState(false),
+    [eggComfort, setEggComfort] = useState(''),
+    [slowComfort, setSlowComfort] = useState('');
+  const lifetime = useRef(new AbortController()),
+    noticeSeen = useRef(''),
+    calloutTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    eggComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    slowComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    eggCount = useRef(0),
+    slowCount = useRef(0),
+    uiState = useRef({ quiet, open });
+  useEffect(() => {
+    uiState.current = { quiet, open };
+  }, [quiet, open]);
   useEffect(() => {
     const controller = new AbortController();
     lifetime.current = controller;
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (calloutTimer.current) clearTimeout(calloutTimer.current);
+      if (eggComfortTimer.current) clearTimeout(eggComfortTimer.current);
+      if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
+    };
   }, []);
   const generation = useRef(0),
-    end = useRef<HTMLDivElement>(null);
+    end = useRef<HTMLDivElement>(null),
+    inputRef = useRef<HTMLInputElement>(null);
   const refresh = useCallback(async () => {
     if (!sessionId) return;
     const current = generation.current;
@@ -180,6 +194,15 @@ function CompanionPanel({
     if (current === generation.current) {
       setState(result);
       setError('');
+      const notice = result.presence?.notice;
+      if (notice && notice.id !== noticeSeen.current) {
+        noticeSeen.current = notice.id;
+        if (!uiState.current.quiet && !uiState.current.open) {
+          setCallout(notice.text);
+          if (calloutTimer.current) clearTimeout(calloutTimer.current);
+          calloutTimer.current = setTimeout(() => setCallout(''), 6500);
+        }
+      }
     }
   }, [sessionId]);
   useEffect(() => {
@@ -204,7 +227,7 @@ function CompanionPanel({
   }, [reaction]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
-  }, [state?.messages.length, open]);
+  }, [state?.messages.length, open, btwMode]);
   async function send() {
     if (!sessionId || !text.trim() || sending) return;
     const current = generation.current;
@@ -216,7 +239,7 @@ function CompanionPanel({
       await request(
         sessionId,
         '/messages',
-        { text: question },
+        { text: question, mode: btwMode ? 'casual' : 'task' },
         lifetime.current.signal,
       );
       if (current === generation.current) await refresh();
@@ -230,14 +253,49 @@ function CompanionPanel({
     }
   }
   async function feedback(kind: string, quick = false) {
+    let comfort = '';
+    if (kind === 'egg') {
+      setSlowComfort('');
+      if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
+      eggCount.current += 1;
+      comfort =
+        eggComfortLines[
+          Math.min(eggCount.current - 1, eggComfortLines.length - 1)
+        ];
+      setEggComfort(comfort);
+      if (eggComfortTimer.current) clearTimeout(eggComfortTimer.current);
+      if (quick && !uiState.current.open) native('peek');
+      eggComfortTimer.current = setTimeout(() => {
+        setEggComfort('');
+        if (!uiState.current.open) native('collapse');
+      }, 6500);
+    }
+    if (kind === 'slow') {
+      setEggComfort('');
+      if (eggComfortTimer.current) clearTimeout(eggComfortTimer.current);
+      slowCount.current += 1;
+      comfort =
+        slowComfortLines[
+          Math.min(slowCount.current - 1, slowComfortLines.length - 1)
+        ];
+      setSlowComfort(comfort);
+      if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
+      if (quick && !uiState.current.open) native('peek');
+      slowComfortTimer.current = setTimeout(() => {
+        setSlowComfort('');
+        if (!uiState.current.open) native('collapse');
+      }, 6500);
+    }
     setReaction(kind);
     setReactionTick((v) => v + 1);
     setNote(
       kind === 'slow'
-        ? '收到，等得有点久了。'
+        ? `催办已收到。${comfort}`
         : kind === 'egg'
-          ? '收到这颗鸡蛋。'
-          : '收到你的反馈。',
+          ? `情绪已投递，不用解释。${comfort}`
+          : kind === 'down'
+            ? '收到。点踩会作为改进反馈，你也可以补充原因。'
+            : '收到你的反馈。',
     );
     if (!sessionId) return;
     let ref: { type: string; id: string } = { type: 'task', id: sessionId };
@@ -251,15 +309,25 @@ function CompanionPanel({
       await request(sessionId, '/feedback', {
         kind,
         target: ref,
-        reason: kind === 'slow' ? '太慢了' : quick ? '' : reason,
+        reason:
+          kind === 'slow'
+            ? '太慢了'
+            : kind === 'egg'
+              ? '情绪释放'
+              : quick
+                ? ''
+                : reason,
       });
       setNote(
         kind === 'egg'
-          ? '收到这颗鸡蛋。已记下你对这次表现的反馈。'
-          : '反馈已记录',
+          ? `情绪已投递，不用解释。${comfort}`
+          : kind === 'slow'
+            ? `催办已收到。${comfort}`
+            : '反馈已记录',
       );
       setReaction(kind);
       setReason('');
+      await refresh();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -268,7 +336,7 @@ function CompanionPanel({
     if (!sessionId) return;
     if (new URLSearchParams(window.location.search).has('native')) {
       native('open');
-      setNote('请在打开的网页小伴中导出记录');
+      setNote('请在打开的网页小艺中导出记录');
       return;
     }
     try {
@@ -278,7 +346,7 @@ function CompanionPanel({
       );
       const a = document.createElement('a');
       a.href = url;
-      a.download = `companion-${sessionId}.json`;
+      a.download = `yi-work-pet-${sessionId}.json`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
@@ -286,13 +354,47 @@ function CompanionPanel({
     }
   }
   const busy = sending || state?.busy;
+  const mood: PetMood =
+    reaction === 'up'
+      ? 'happy'
+      : reaction === 'down' || reaction === 'egg'
+        ? 'sad'
+        : reaction === 'slow'
+          ? 'computer'
+          : (state?.presence?.mood ?? fallbackMood(state?.progress.status));
+  const visibleMessages = (state?.messages ?? []).filter(
+    (message) => (message.mode ?? 'task') === (btwMode ? 'casual' : 'task'),
+  );
+  function openBtwChat() {
+    setBtwMode(true);
+    setTarget('task');
+    setText('');
+    setOpen(true);
+    native('expand');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
   return (
-    <div className={`companion ${standalone ? 'companion-standalone' : ''}`}>
+    <div
+      className={`companion ${standalone ? 'companion-standalone' : ''} pet-presence-${state?.presence?.activity ?? 'resting'} ${reaction ? `pet-reacting-${reaction}` : ''}`}
+    >
       {open && (
-        <section className="pet-panel" aria-label="小伴独立对话">
+        <section
+          className={`pet-panel ${btwMode ? 'pet-panel-btw' : ''}`}
+          aria-label={btwMode ? 'BTW 独立对话' : '小艺独立对话'}
+        >
           <header>
-            <span onPointerDown={() => native('drag')} title="拖动桌面窗口">
-              <GripHorizontal size={15} /> 小伴
+            <span
+              className="pet-panel-title"
+              onPointerDown={() => native('drag')}
+              title="拖动桌面窗口"
+            >
+              <PetFace mood={mood} />
+              <span>
+                <strong>{btwMode ? 'BTW · 随手问问' : '小艺'}</strong>
+                <small>
+                  {btwMode ? '独立对话，不打断主任务' : '你的 AI 工作搭子'}
+                </small>
+              </span>
             </span>
             <div>
               <button
@@ -303,8 +405,9 @@ function CompanionPanel({
                 <Download size={15} />
               </button>
               <button
-                aria-label="收起小伴"
+                aria-label="收起小艺"
                 onClick={() => {
+                  setBtwMode(false);
                   setOpen(false);
                   native('collapse');
                 }}
@@ -313,7 +416,7 @@ function CompanionPanel({
               </button>
               {standalone && (
                 <button
-                  aria-label="退出桌面宠物"
+                  aria-label="退出小艺桌面宠物"
                   onClick={() => native('close')}
                 >
                   <X size={16} />
@@ -321,40 +424,51 @@ function CompanionPanel({
               )}
             </div>
           </header>
-          <div className="pet-progress">
-            <strong>
-              {state?.progress.label ??
-                (sessionId ? '正在连接…' : '还没有任务')}
-            </strong>
-            <span>
-              {state?.progress.title ?? '开始一个任务后，我会帮你留意进展。'}
-            </span>
-            {state?.progress.latest && (
-              <small>
-                最近操作 · {state.progress.latest.tool} ·{' '}
-                {state.progress.latest.status}
-              </small>
-            )}
-            {state && (
-              <small>
-                成功 {state.progress.completed} 次 · 失败{' '}
-                {state.progress.failed} 次 · 子任务{' '}
-                {state.progress.children.length} 个
-              </small>
-            )}
-          </div>
+          {btwMode ? (
+            <div className="pet-btw-welcome">
+              <strong>想顺便问点什么？</strong>
+              <span>
+                直接输入简单问题。这里的对话独立保存，不会进入主任务。
+              </span>
+            </div>
+          ) : (
+            <div className="pet-progress">
+              <strong>
+                {state?.progress.label ??
+                  (sessionId ? '正在连接…' : '还没有任务')}
+              </strong>
+              <span>
+                {state?.progress.title ?? '开始一个任务后，我会帮你留意进展。'}
+              </span>
+              {state?.progress.latest && (
+                <small>
+                  最近操作 · {state.progress.latest.tool} ·{' '}
+                  {state.progress.latest.status}
+                </small>
+              )}
+              {state && (
+                <small>
+                  成功 {state.progress.completed} 次 · 失败{' '}
+                  {state.progress.failed} 次 · 子任务{' '}
+                  {state.progress.children.length} 个
+                </small>
+              )}
+            </div>
+          )}
           <div className="pet-chat" aria-live="polite">
-            {!state?.messages.length && (
+            {!visibleMessages.length && (
               <p className="pet-intro">
-                可以问我“现在做到哪了”，或聊点别的。这里的对话独立保存，不会打断主助手。
+                {btwMode
+                  ? '这是一个和主任务分开的轻量对话，适合顺手问一个简单问题。'
+                  : '可以问我“现在做到哪了”，也可以通过 BTW 入口单独问个简单问题。这里的对话独立保存，不会打断主助手。'}
                 <br />
                 真实模型模式下，问题和检索片段会发给你配置的模型服务。
               </p>
             )}
-            {state?.messages.map((m) => (
+            {visibleMessages.map((m) => (
               <article className={`pet-msg pet-msg-${m.role}`} key={m.id}>
                 <span>
-                  {m.role === 'user' ? '你' : '小伴'}
+                  {m.role === 'user' ? '你' : '小艺'}
                   {m.simulated ? ' · 模拟' : ''}
                   {m.time
                     ? ' · ' +
@@ -391,7 +505,7 @@ function CompanionPanel({
                     className="pet-target-link"
                     onClick={() => {
                       setTarget('pet:' + m.id);
-                      setNote('下方反馈将对应这条小伴回答');
+                      setNote('下方反馈将对应这条小艺回答');
                     }}
                   >
                     评价这条回答
@@ -406,6 +520,17 @@ function CompanionPanel({
               {error}
             </p>
           )}
+          {(eggComfort || slowComfort) && (
+            <div className="pet-emotion-note" role="status">
+              <span aria-hidden="true">{eggComfort ? '🥚' : '🐢'}</span>
+              <div>
+                <strong>
+                  {eggComfort ? '情绪已投递' : '小艺正在替你盯进度'}
+                </strong>
+                <p>{eggComfort || slowComfort}</p>
+              </div>
+            </div>
+          )}
           <form
             className="pet-input"
             onSubmit={(e) => {
@@ -414,8 +539,9 @@ function CompanionPanel({
             }}
           >
             <input
-              aria-label="问问小伴"
-              placeholder="问问小伴…"
+              ref={inputRef}
+              aria-label={btwMode ? 'BTW 简单问题' : '问问小艺'}
+              placeholder={btwMode ? '顺便问个简单问题…' : '问问小艺当前进展…'}
               value={text}
               maxLength={4000}
               onChange={(e) => setText(e.target.value)}
@@ -424,7 +550,7 @@ function CompanionPanel({
             {busy ? (
               <button
                 type="button"
-                aria-label="停止小伴回答"
+                aria-label="停止小艺回答"
                 onClick={() =>
                   sessionId &&
                   request(sessionId, '/cancel', {}).catch((e) =>
@@ -437,7 +563,7 @@ function CompanionPanel({
             ) : (
               <button
                 type="submit"
-                aria-label="发送给小伴"
+                aria-label="发送给小艺"
                 disabled={!text.trim() || !sessionId}
               >
                 <Send size={16} />
@@ -459,11 +585,11 @@ function CompanionPanel({
                 {state?.progress.latest && (
                   <option value="action">最近一次工具操作</option>
                 )}
-                {state?.messages
+                {visibleMessages
                   .filter((m) => m.role === 'assistant')
                   .map((m, i) => (
                     <option key={m.id} value={'pet:' + m.id}>
-                      小伴回答 {i + 1}
+                      小艺回答 {i + 1}
                     </option>
                   ))}
               </select>
@@ -476,17 +602,27 @@ function CompanionPanel({
               </button>
               <button
                 aria-label="点踩"
+                title="结果不满意，留下改进反馈"
                 onClick={() => feedback('down')}
                 disabled={!sessionId}
               >
                 <ThumbsDown size={16} />
               </button>
               <button
-                aria-label="扔鸡蛋"
+                aria-label="扔鸡蛋，释放情绪"
+                title="不用解释，先扔颗蛋消消气"
                 onClick={() => feedback('egg')}
                 disabled={!sessionId}
               >
                 🥚
+              </button>
+              <button
+                aria-label="催一催，太慢了"
+                title="等得有点久，让小艺替你盯进度"
+                onClick={() => feedback('slow')}
+                disabled={!sessionId}
+              >
+                🐢
               </button>
             </div>
             <input
@@ -499,13 +635,20 @@ function CompanionPanel({
             <small>
               {note || '反馈只保存在本机；导出后可人工分析，不自动用于训练。'}
             </small>
+            <p className="pet-feedback-hint">
+              <span>👎 帮助改进结果</span>
+              <span>🥚 只管释放情绪</span>
+              <span>🐢 替你催办盯进度</span>
+            </p>
           </details>
           <footer>
             <label>
               <input
                 type="checkbox"
                 checked={quiet}
-                onChange={(e) => setQuiet(e.target.checked)}
+                onChange={(e) => {
+                  setQuiet(e.target.checked);
+                }}
               />{' '}
               安静陪伴
             </label>
@@ -535,12 +678,12 @@ function CompanionPanel({
             )}
             {!standalone && (
               <button
-                aria-label="独立打开小伴"
+                aria-label="独立打开小艺"
                 title="独立窗口；macOS 桌面浮窗请运行 npm run desktop"
                 onClick={() =>
                   window.open(
                     '/pet/?session=' + encodeURIComponent(sessionId ?? ''),
-                    'harness-pet',
+                    'yi-work-pet',
                     'width=420,height=760',
                   )
                 }
@@ -552,7 +695,16 @@ function CompanionPanel({
         </section>
       )}
       <div className="pet-dock">
-        <div className="pet-quick-reactions" aria-label="随手表达心情">
+        <div className="pet-quick-reactions" aria-label="快捷入口与情绪反馈">
+          <button
+            className="pet-quick-btw"
+            aria-label="BTW，单独问个简单问题"
+            title="打开独立轻量对话，不打断主任务"
+            onClick={openBtwChat}
+            disabled={!sessionId}
+          >
+            BTW
+          </button>
           <button
             aria-label="不错，点赞"
             title="不错"
@@ -562,21 +714,23 @@ function CompanionPanel({
           </button>
           <button
             aria-label="不满意，点踩"
-            title="不满意"
+            title="结果不满意，留下改进反馈"
             onClick={() => void feedback('down', true)}
           >
             👎
           </button>
           <button
-            aria-label="做得不好，扔鸡蛋"
-            title="做得不好"
+            className="pet-quick-egg"
+            aria-label="扔鸡蛋，释放情绪"
+            title="不想解释，先扔颗蛋消消气"
             onClick={() => void feedback('egg', true)}
           >
             🥚
           </button>
           <button
-            aria-label="太慢了"
-            title="太慢了太慢了"
+            className="pet-quick-slow"
+            aria-label="催一催，太慢了"
+            title="等得有点久，让小艺替你盯进度"
             onClick={() => void feedback('slow', true)}
           >
             🐢
@@ -585,7 +739,7 @@ function CompanionPanel({
         {standalone && (
           <button
             className="pet-drag"
-            aria-label="拖动小伴"
+            aria-label="拖动小艺"
             onPointerDown={() => native('drag')}
           >
             <GripHorizontal size={15} />
@@ -593,47 +747,62 @@ function CompanionPanel({
         )}
         {!quiet && !open && (
           <button
-            className="pet-bubble"
+            className={`pet-bubble ${eggComfort ? 'pet-bubble-egg' : ''} ${slowComfort ? 'pet-bubble-slow' : ''}`}
             onClick={() => {
+              setBtwMode(false);
+              setText('');
               setOpen(true);
               native('expand');
             }}
           >
-            {reaction === 'slow'
-              ? '收到，等得有点久了'
-              : reaction === 'egg'
-                ? '这颗鸡蛋我收下了'
+            {slowComfort
+              ? slowComfort
+              : eggComfort
+                ? eggComfort
                 : reaction === 'down'
                   ? '收到，不满意记下了'
                   : reaction === 'up'
                     ? '收到鼓励啦'
-                    : error
-                      ? '连接已断开'
-                      : (state?.progress.label ?? '我在这里')}
+                    : callout
+                      ? callout
+                      : error
+                        ? '连接已断开'
+                        : (state?.progress.label ?? '我在这里')}
           </button>
         )}
         <button
           className="pet-character"
-          aria-label={open ? '小伴正在陪伴' : '打开小伴'}
+          aria-label={open ? '小艺正在陪伴' : '打开小艺'}
           onClick={() => {
+            if (!open) {
+              setBtwMode(false);
+              setText('');
+            }
             setOpen((v) => !v);
             native(open ? 'collapse' : 'expand');
           }}
         >
-          <PetFace
-            key={reactionTick}
-            mood={
-              reaction === 'egg'
-                ? 'egg'
-                : reaction === 'up'
-                  ? 'happy'
-                  : reaction === 'down'
-                    ? 'failed'
-                    : reaction === 'slow'
-                      ? 'waiting'
-                      : (state?.progress.status ?? 'idle')
-            }
-          />
+          <PetFace key={reactionTick} mood={mood} />
+          {reaction === 'egg' && (
+            <>
+              <span className="pet-egg-flight" aria-hidden="true">
+                🥚
+              </span>
+              <span className="pet-egg-release" aria-hidden="true">
+                情绪 −1
+              </span>
+            </>
+          )}
+          {reaction === 'slow' && (
+            <>
+              <span className="pet-slow-runner" aria-hidden="true">
+                🐢
+              </span>
+              <span className="pet-slow-watch" aria-hidden="true">
+                替你盯着
+              </span>
+            </>
+          )}
         </button>
       </div>
     </div>

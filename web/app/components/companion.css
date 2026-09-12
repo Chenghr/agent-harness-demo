@@ -275,8 +275,11 @@
 .companion-standalone {
   position: static;
   width: 100%;
+  flex: 1;
+  min-height: 0;
   display: flex;
   align-items: flex-end;
+  justify-content: flex-end;
   flex-direction: column;
 }
 .companion-standalone .pet-panel {
@@ -443,5 +446,505 @@ body:has(.pet-standalone-page) {
   .pet-egg-splash,
   .pet-waiting .pet-body {
     animation: none;
+  }
+}
+
+/* Robot companion v2 */
+.companion {
+  --pet-line: #d9e8ef;
+  --pet-blue: #0d5c87;
+  --pet-cyan: #33d8eb;
+  --pet-navy: #092d52;
+  color: #17354a;
+}
+
+.pet-character {
+  position: relative;
+  width: 112px !important;
+  height: 112px !important;
+  border-radius: 50% !important;
+  filter: drop-shadow(0 12px 12px rgba(4, 44, 76, 0.2));
+  transform-origin: center bottom;
+}
+
+.pet-character:hover {
+  background: transparent !important;
+  filter: drop-shadow(0 15px 16px rgba(4, 44, 76, 0.26));
+  transform: translateY(-2px) scale(1.03);
+}
+
+.pet-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: center bottom;
+}
+
+.pet-sprite {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  image-rendering: pixelated;
+  user-select: none;
+}
+
+.pet-computer {
+  animation: robot-computer 1.7s ease-in-out infinite;
+}
+
+.pet-happy {
+  animation: robot-happy 0.5s ease-in-out 3;
+}
+
+.pet-jump {
+  animation: robot-jump 0.72s cubic-bezier(0.22, 0.9, 0.32, 1.15) 3;
+}
+
+.pet-sad {
+  animation: robot-sad 2.2s ease-in-out infinite;
+}
+
+.pet-wink {
+  animation: robot-idle 3.8s ease-in-out infinite;
+}
+
+.pet-presence-working .pet-character:after,
+.pet-presence-chatting .pet-character:after {
+  content: '';
+  position: absolute;
+  right: 11px;
+  bottom: 13px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--pet-cyan);
+  box-shadow: 0 0 0 4px rgba(51, 216, 235, 0.16);
+}
+
+.pet-panel {
+  width: 376px;
+  border-color: var(--pet-line);
+  border-radius: 16px;
+  background: rgba(252, 254, 255, 0.98);
+  box-shadow:
+    0 24px 60px rgba(4, 42, 70, 0.16),
+    0 2px 8px rgba(4, 42, 70, 0.06);
+  backdrop-filter: blur(18px);
+}
+
+.pet-panel header {
+  min-height: 62px;
+  padding: 8px 12px 8px 10px;
+  border-color: var(--pet-line);
+  background: linear-gradient(135deg, #f7fdff, #f2f9fc);
+}
+
+.pet-panel-title {
+  gap: 8px !important;
+}
+
+.pet-panel-title > .pet-face {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+}
+
+.pet-panel-title > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 0 !important;
+}
+
+.pet-panel-title strong {
+  color: var(--pet-navy);
+  font-size: 13px;
+}
+
+.pet-panel-title small {
+  color: #7591a2;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.pet-panel header button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #557488;
+}
+
+.pet-panel header button:hover {
+  color: var(--pet-blue);
+  background: #e9f5f9;
+}
+
+.pet-panel-btw header {
+  background: linear-gradient(135deg, #f4fbff, #f7f4ff);
+}
+
+.pet-btw-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 16px;
+  border-bottom: 1px solid #dfe8f2;
+  background: linear-gradient(135deg, #f7fcff, #faf8ff);
+}
+
+.pet-btw-welcome strong {
+  color: #263f73;
+  font-size: 13px;
+}
+
+.pet-btw-welcome span {
+  color: #6f7f9f;
+  font-size: 10px;
+}
+
+.pet-progress {
+  position: relative;
+  gap: 3px;
+  padding: 13px 16px 14px;
+  border-color: var(--pet-line);
+  background: linear-gradient(135deg, #f4fbfd, #f8fcfd);
+}
+
+.pet-progress:after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  bottom: 0;
+  left: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pet-cyan), rgba(51, 216, 235, 0));
+  opacity: 0.55;
+}
+
+.pet-progress strong {
+  color: var(--pet-navy);
+  font-size: 13px;
+}
+
+.pet-progress span {
+  color: #557183;
+}
+
+.pet-chat {
+  scrollbar-color: #c9dde6 transparent;
+}
+
+.pet-msg p {
+  color: #29495d;
+}
+
+.pet-msg-user p {
+  border: 1px solid #dceaf0;
+  border-radius: 10px 10px 3px 10px;
+  background: #f1f8fa;
+}
+
+.pet-input {
+  border-color: #cfe1e9;
+  border-radius: 11px;
+  background: white;
+  box-shadow: 0 3px 12px rgba(4, 42, 70, 0.04);
+}
+
+.pet-input:focus-within {
+  border-color: #73bed2;
+  box-shadow: 0 0 0 3px rgba(51, 216, 235, 0.12);
+}
+
+.pet-input button:not(:disabled) {
+  color: white;
+  background: var(--pet-blue);
+}
+
+.pet-feedback-row button:hover,
+.pet-panel footer button:hover {
+  color: var(--pet-blue);
+  background: #eaf6fa;
+}
+
+.pet-bubble {
+  position: relative;
+  max-width: 220px;
+  padding: 8px 12px !important;
+  border-color: #cfe2ea !important;
+  border-radius: 12px 12px 3px 12px !important;
+  color: #24485c !important;
+  background: rgba(255, 255, 255, 0.97) !important;
+  box-shadow: 0 8px 24px rgba(4, 42, 70, 0.12);
+  text-align: left;
+  animation: robot-callout 180ms ease-out;
+}
+
+.pet-bubble:hover {
+  color: var(--pet-blue) !important;
+  background: white !important;
+}
+
+.pet-bubble-egg,
+.pet-bubble-slow {
+  max-width: 238px;
+  line-height: 1.55;
+}
+
+.pet-bubble-egg {
+  border-color: #efd8a4 !important;
+  background: linear-gradient(135deg, #fffdf8, #fff8e8) !important;
+}
+
+.pet-bubble-slow {
+  border-color: #bee1d5 !important;
+  background: linear-gradient(135deg, #f7fffb, #edf9f4) !important;
+}
+
+.pet-emotion-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 12px 10px;
+  padding: 10px 12px;
+  border: 1px solid #d7e8df;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #fbfffd, #f2faf6);
+  box-shadow: 0 4px 14px rgba(25, 91, 70, 0.06);
+  animation: robot-callout 180ms ease-out;
+}
+
+.pet-emotion-note > span {
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.pet-emotion-note strong {
+  display: block;
+  color: #215f50;
+  font-size: 11px;
+}
+
+.pet-emotion-note p {
+  margin: 2px 0 0;
+  color: #507267;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pet-feedback-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+  color: #81949f;
+  font-size: 9px;
+}
+
+.pet-feedback-hint span {
+  white-space: nowrap;
+}
+
+.pet-quick-reactions {
+  right: 10px;
+  bottom: 2px;
+  border-color: #d5e6ed;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 6px 18px rgba(4, 42, 70, 0.1);
+}
+
+.pet-quick-reactions button:hover {
+  background: #eaf7fa;
+}
+
+.pet-quick-reactions .pet-quick-btw {
+  width: auto;
+  min-width: 38px;
+  padding: 0 7px;
+  border-right: 1px solid #dbe9ef;
+  border-radius: 13px 6px 6px 13px;
+  color: #176b8f;
+  font:
+    800 9px/1 ui-monospace,
+    SFMono-Regular,
+    monospace;
+  letter-spacing: 0.06em;
+}
+
+.pet-quick-reactions .pet-quick-btw:hover {
+  color: white;
+  background: linear-gradient(135deg, #1986ab, #6557b8);
+}
+
+.pet-quick-reactions .pet-quick-egg:hover {
+  background: #fff3d7;
+}
+
+.pet-quick-reactions .pet-quick-slow:hover {
+  background: #e7f8ef;
+}
+
+.pet-egg-flight,
+.pet-egg-release,
+.pet-slow-runner,
+.pet-slow-watch {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.pet-egg-flight {
+  left: -52px;
+  bottom: 18px;
+  font-size: 26px;
+  animation: pet-egg-throw 680ms cubic-bezier(0.26, 0.78, 0.36, 1) both;
+}
+
+.pet-egg-release,
+.pet-slow-watch {
+  top: -18px;
+  right: 4px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #7b5a1d;
+  background: #fff5d8;
+  box-shadow: 0 5px 14px rgba(85, 61, 15, 0.13);
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: pet-release-pop 1.7s ease-out both;
+}
+
+.pet-slow-runner {
+  left: -45px;
+  bottom: 13px;
+  font-size: 24px;
+  animation: pet-turtle-run 1.45s ease-in-out both;
+}
+
+.pet-slow-watch {
+  color: #286c58;
+  background: #e8f8f0;
+  box-shadow: 0 5px 14px rgba(25, 91, 70, 0.12);
+}
+
+.native-pet .pet-character {
+  width: 126px !important;
+  height: 126px !important;
+}
+
+.native-pet .pet-dock {
+  min-height: 138px;
+}
+
+@keyframes robot-idle {
+  50% {
+    transform: translateY(-3px) rotate(0.8deg);
+  }
+}
+
+@keyframes robot-computer {
+  50% {
+    transform: translateY(-2px) scale(1.015);
+    filter: drop-shadow(0 0 7px rgba(51, 216, 235, 0.24));
+  }
+}
+
+@keyframes robot-happy {
+  45% {
+    transform: translateY(-10px) scale(1.04);
+  }
+}
+
+@keyframes robot-jump {
+  42% {
+    transform: translateY(-16px) rotate(-2deg);
+  }
+
+  72% {
+    transform: translateY(1px) scaleY(0.96);
+  }
+}
+
+@keyframes robot-sad {
+  50% {
+    transform: translateY(3px) rotate(-1.3deg) scale(0.985);
+  }
+}
+
+@keyframes robot-callout {
+  from {
+    opacity: 0;
+    transform: translateX(5px) scale(0.98);
+  }
+}
+
+@keyframes pet-egg-throw {
+  0% {
+    opacity: 0;
+    transform: translate(-18px, 24px) rotate(-35deg) scale(0.75);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(58px, -33px) rotate(310deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(68px, -18px) rotate(350deg) scale(1.3);
+  }
+}
+
+@keyframes pet-turtle-run {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px) rotate(-8deg) scale(0.75);
+  }
+  25%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(76px) rotate(4deg) scale(1.05);
+  }
+}
+
+@keyframes pet-release-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(5px) scale(0.82);
+  }
+  18%,
+  74% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-computer,
+  .pet-happy,
+  .pet-jump,
+  .pet-sad,
+  .pet-wink,
+  .pet-bubble,
+  .pet-emotion-note {
+    animation: none !important;
+  }
+
+  .pet-egg-flight,
+  .pet-egg-release,
+  .pet-slow-runner,
+  .pet-slow-watch {
+    animation: none !important;
   }
 }

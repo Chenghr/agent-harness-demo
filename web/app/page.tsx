@@ -17,6 +17,7 @@ import { CompletionReview } from './components/completion-review';
 import type { CompletionRecord } from '../../server/runtime/contracts.ts';
 import {
   Activity,
+  ArrowDown,
   ArrowRight,
   BookOpen,
   Box,
@@ -354,7 +355,7 @@ export default function Home() {
   const [tab, setTab] = useState('agents');
   const [busy, setBusy] = useState(false);
   const [inspectOpen, setInspectOpen] = useState(false);
-  const [examplesOpen, setExamplesOpen] = useState(false);
+  const [examplesOpen, setExamplesOpen] = useState(true);
   const [error, setError] = useState('');
   const [connected, setConnected] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -385,6 +386,7 @@ export default function Home() {
   const [childDraft, setChildDraft] = useState('');
   const [childType, setChildType] = useState('general');
   const [childFiles, setChildFiles] = useState('');
+  const chatRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const refreshList = useCallback(
@@ -448,9 +450,18 @@ export default function Home() {
     if (selected) refreshList().catch(fail);
   }, [sessionStatus, selected, refreshList]);
   useEffect(() => {
-    if (autoScroll)
+    if (!selected) {
+      chatRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    } else if (autoScroll) {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [session?.chat.length, streaming, session?.approvals.length, autoScroll]);
+    }
+  }, [
+    selected,
+    session?.chat.length,
+    streaming,
+    session?.approvals.length,
+    autoScroll,
+  ]);
   useEffect(() => {
     if (!catalogOpen) return;
     const controller = new AbortController();
@@ -478,6 +489,7 @@ export default function Home() {
     setEvents([]);
     setStreaming('');
     setConnected(false);
+    setAutoScroll(true);
     setSelected(id);
     setMessageTarget('main');
     if (id) localStorage.setItem('harness.selected-session', id);
@@ -567,7 +579,7 @@ export default function Home() {
             <Workflow size={23} />
           </div>
           <div>
-            Harness<span>工作空间</span>
+            艺工作<span>AI AGENT 工作空间</span>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -655,7 +667,7 @@ export default function Home() {
             模型与运行设置
           </Button>
           <div className="version">
-            HARNESS LAB <span>v1.0</span>
+            YI WORK <span>v1.0</span>
           </div>
         </SidebarFooter>
       </Sidebar>
@@ -674,10 +686,13 @@ export default function Home() {
           >
             <Plus size={17} />
           </Button>
-          <div className="breadcrumb">
-            工作台
-            <ChevronRight size={14} />
-            <strong>{session?.title ?? '新建任务'}</strong>
+          <div className="task-context">
+            <div className="breadcrumb">
+              工作台
+              <ChevronRight size={14} />
+              <strong>{session?.title ?? '新建任务'}</strong>
+            </div>
+            {session && <Status status={session.status} />}
           </div>
           <div className="topbar-right">
             <Button
@@ -700,6 +715,7 @@ export default function Home() {
               </Button>
             )}
             <Button
+              className="inspect-toggle"
               size="sm"
               variant="ghost"
               onClick={() => setInspectOpen((v) => !v)}
@@ -709,6 +725,7 @@ export default function Home() {
             </Button>
             {session && (
               <Button
+                className="artifact-button"
                 size="sm"
                 variant="ghost"
                 onClick={() => setDeliveryOpen(true)}
@@ -734,6 +751,7 @@ export default function Home() {
               {selected ? (connected ? '实时连接' : '重新连接中') : '本地模式'}
             </span>
             <Button
+              className="catalog-button"
               size="sm"
               variant="outline"
               onClick={() => setCatalogOpen(true)}
@@ -782,6 +800,7 @@ export default function Home() {
               </div>
             </div>
             <div
+              ref={chatRef}
               className="chat-scroll"
               onScroll={(e) => {
                 const el = e.currentTarget;
@@ -795,7 +814,7 @@ export default function Home() {
                   <div className="welcome-mark">
                     <Workflow size={32} />
                   </div>
-                  <p className="eyebrow">把事情交给助手，进展留在这里</p>
+                  <p className="eyebrow">AI 多干活，我们少干活，让工作更简单</p>
                   <h1>今天想完成什么？</h1>
                   <p className="welcome-description">
                     描述你要做的事。过程中可以随时补充要求，完成后在这里查看成果。
@@ -889,7 +908,7 @@ export default function Home() {
                 </article>
               )}
               {active && !streaming && (
-                <div className="working-line">
+                <output className="working-line" aria-live="polite">
                   <span className="pulse-dot" />
                   {approvals.length
                     ? '操作需要你的授权'
@@ -897,7 +916,7 @@ export default function Home() {
                       ? '正在停止并回收任务资源…'
                       : '运行时正在推进任务…'}
                   <span>{session?.stats.toolCalls ?? 0} 次调用</span>
-                </div>
+                </output>
               )}
               {approvals.map((a) => (
                 <div className="approval-card" key={a.id}>
@@ -939,6 +958,7 @@ export default function Home() {
                   )}
                   <div className="approval-actions">
                     <Button
+                      className="approval-deny"
                       variant="outline"
                       size="sm"
                       onClick={() =>
@@ -949,6 +969,7 @@ export default function Home() {
                     </Button>
                     {a.scope !== 'once' && (
                       <Button
+                        className="approval-scope"
                         variant="outline"
                         size="sm"
                         onClick={() =>
@@ -959,6 +980,7 @@ export default function Home() {
                       </Button>
                     )}
                     <Button
+                      className="approval-allow"
                       size="sm"
                       onClick={() =>
                         command('approvals/' + a.id, { decision: 'once' })
@@ -992,6 +1014,21 @@ export default function Home() {
               )}
               <div ref={endRef} />
             </div>
+            {!autoScroll && (
+              <button
+                className="scroll-latest"
+                onClick={() => {
+                  setAutoScroll(true);
+                  endRef.current?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'end',
+                  });
+                }}
+              >
+                <ArrowDown size={13} />
+                回到最新
+              </button>
+            )}
             {error && (
               <div className="error-bar" role="alert">
                 <span>{error}</span>
@@ -1111,6 +1148,7 @@ export default function Home() {
                     )}
                     {active && (
                       <Button
+                        className="stop-button"
                         size="icon"
                         variant="outline"
                         onClick={() => command('stop')}
@@ -1182,11 +1220,39 @@ export default function Home() {
                 className="inspector-tabs"
               >
                 <TabsList variant="line">
-                  <TabsTrigger value="agents">任务树</TabsTrigger>
-                  <TabsTrigger value="tools">工具</TabsTrigger>
-                  <TabsTrigger value="context">上下文</TabsTrigger>
-                  <TabsTrigger value="events">事件</TabsTrigger>
-                  <TabsTrigger value="files">产物</TabsTrigger>
+                  <TabsTrigger value="agents" aria-label="任务树">
+                    任务树
+                    <span className="tab-count" aria-hidden="true">
+                      {Object.keys(session?.agents ?? {}).length}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="tools" aria-label="工具">
+                    工具
+                    <span className="tab-count" aria-hidden="true">
+                      {(main?.loadedTools.length ?? 0) +
+                        (main?.loadedSkills.length ?? 0)}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="context" aria-label="上下文">
+                    上下文
+                    {!!context?.compactions && (
+                      <span className="tab-count" aria-hidden="true">
+                        {context.compactions}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="events" aria-label="事件">
+                    事件
+                    <span className="tab-count" aria-hidden="true">
+                      {visibleEvents.length}
+                    </span>
+                  </TabsTrigger>
+                  <TabsTrigger value="files" aria-label="产物">
+                    产物
+                    <span className="tab-count" aria-hidden="true">
+                      {session?.artifacts.length ?? 0}
+                    </span>
+                  </TabsTrigger>
                 </TabsList>
                 <TabsContent value="agents">
                   <div className="panel-label">
@@ -1203,11 +1269,13 @@ export default function Home() {
                     />
                   ) : (
                     <>
-                      <div className="agent-tree">
+                      <div className="agent-tree" role="tree">
                         {Object.values(session.agents).map((a) => (
                           <div
-                            className={`agent-card ${a.parentId ? 'child-agent' : ''}`}
+                            className={`agent-card ${a.parentId ? 'child-agent' : ''} ${activeStates.includes(a.status) ? 'agent-active' : ''}`}
                             key={a.id}
+                            role="treeitem"
+                            aria-label={`${a.parentId ? '子助手' : '主助手'}：${a.goal}`}
                           >
                             <div className="agent-card-top">
                               <div className="agent-icon">
@@ -1256,9 +1324,34 @@ export default function Home() {
                               )}
                             </div>
                             {a.delegation && (
+                              <div className="agent-boundary">
+                                <span>
+                                  {a.delegation.workspaceMode === 'outputs'
+                                    ? '可写 outputs'
+                                    : '只读'}
+                                </span>
+                                <span>
+                                  {a.delegation.materials.length
+                                    ? `${a.delegation.materials.length} 项材料`
+                                    : '未分配材料'}
+                                </span>
+                                <span>
+                                  {a.delegation.tools.length
+                                    ? a.delegation.tools.length > 99
+                                      ? '继承工具范围'
+                                      : `${a.delegation.tools.length} 个工具`
+                                    : '未分配工具'}
+                                </span>
+                              </div>
+                            )}
+                            {a.delegation && (
                               <details className="assistant-details">
                                 <summary>
-                                  材料与工作范围{a.stale ? ' · 依据已变化' : ''}
+                                  <span>
+                                    材料与工作范围
+                                    {a.stale ? ' · 依据已变化' : ''}
+                                  </span>
+                                  <ChevronRight size={13} />
                                 </summary>
                                 <p>
                                   材料：
@@ -1381,6 +1474,7 @@ export default function Home() {
                             {a.parentId && activeStates.includes(a.status) && (
                               <div className="child-actions">
                                 <Button
+                                  className="child-cancel-button"
                                   size="sm"
                                   variant="ghost"
                                   onClick={() =>
