@@ -39,6 +39,7 @@ type PetMessage = {
   sources?: Evidence[];
 };
 type PetMood = 'computer' | 'happy' | 'jump' | 'sad' | 'wink';
+type PetFeedback = 'up' | 'down' | 'egg' | 'slow';
 type PetState = {
   progress: {
     title: string;
@@ -119,6 +120,12 @@ const petAssets: Record<PetMood, string> = {
   sad: '/assets/pet/robot-sad.png',
   wink: '/assets/pet/robot-wink.png',
 };
+const feedbackMoods: Record<PetFeedback, PetMood> = {
+  up: 'happy',
+  down: 'sad',
+  egg: 'wink',
+  slow: 'computer',
+};
 const eggComfortLines = [
   '啪！这颗我接住了，坏情绪先交给我。',
   '再来一颗也没关系，今天先别为难自己。',
@@ -170,7 +177,7 @@ function CompanionPanel({
     [sending, setSending] = useState(false),
     [error, setError] = useState(''),
     [note, setNote] = useState(''),
-    [reaction, setReaction] = useState(''),
+    [reaction, setReaction] = useState<PetFeedback | null>(null),
     [reactionTick, setReactionTick] = useState(0),
     [quiet, setQuiet] = useState(false),
     [target, setTarget] = useState('task'),
@@ -183,8 +190,7 @@ function CompanionPanel({
     [position, setPosition] = useState<PetPosition | null>(null),
     [dragging, setDragging] = useState(false),
     [webPositioning, setWebPositioning] = useState(false),
-    [panelPosition, setPanelPosition] = useState<PetPosition | null>(null),
-    [steadyMood, setSteadyMood] = useState<PetMood | null>(null);
+    [panelPosition, setPanelPosition] = useState<PetPosition | null>(null);
   const lifetime = useRef(new AbortController()),
     companionRef = useRef<HTMLDivElement>(null),
     panelRef = useRef<HTMLElement>(null),
@@ -200,7 +206,6 @@ function CompanionPanel({
     calloutTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     eggComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     slowComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
-    steadyMoodTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     eggCount = useRef(0),
     slowCount = useRef(0),
     uiState = useRef({ quiet, open });
@@ -224,7 +229,10 @@ function CompanionPanel({
     };
   }, []);
   useEffect(() => {
-    setWebPositioning(!hasNativeBridge());
+    const frame = requestAnimationFrame(() =>
+      setWebPositioning(!hasNativeBridge()),
+    );
+    return () => cancelAnimationFrame(frame);
   }, []);
   const placePanel = useCallback(() => {
     const panel = panelRef.current;
@@ -248,10 +256,7 @@ function CompanionPanel({
     setPanelPosition({ x, y });
   }, []);
   useLayoutEffect(() => {
-    if (!open || !webPositioning) {
-      setPanelPosition(null);
-      return;
-    }
+    if (!open || !webPositioning) return;
     placePanel();
   }, [open, position, webPositioning, placePanel]);
   useEffect(() => {
@@ -272,19 +277,6 @@ function CompanionPanel({
       localStorage.removeItem(positionStorageKey);
     }
   }, [clampPosition, positionStorageKey]);
-  useEffect(() => {
-    if (!position) return;
-    const frame = requestAnimationFrame(() =>
-      setPosition((current) => (current ? clampPosition(current) : current)),
-    );
-    return () => cancelAnimationFrame(frame);
-  }, [open, clampPosition]);
-  useEffect(() => {
-    const keepVisible = () =>
-      setPosition((current) => (current ? clampPosition(current) : current));
-    window.addEventListener('resize', keepVisible);
-    return () => window.removeEventListener('resize', keepVisible);
-  }, [clampPosition]);
   function startDrag(event: React.PointerEvent<HTMLElement>) {
     if (event.button !== 0) return;
     if (native('drag')) return;
@@ -292,8 +284,9 @@ function CompanionPanel({
     if (!rect) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const origin = clampPosition({ x: rect.left, y: rect.top });
-    setPosition(origin);
+    // Pressing buttons or beginning a pointer gesture must not move the pet.
+    // Its coordinates are updated only after an actual drag movement.
+    const origin = { x: rect.left, y: rect.top };
     setDragging(true);
     dragRef.current = {
       pointerId: event.pointerId,
@@ -307,10 +300,13 @@ function CompanionPanel({
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 4) return;
     setPosition(
       clampPosition({
-        x: drag.originX + event.clientX - drag.startX,
-        y: drag.originY + event.clientY - drag.startY,
+        x: drag.originX + deltaX,
+        y: drag.originY + deltaY,
       }),
     );
   }
@@ -335,7 +331,6 @@ function CompanionPanel({
       if (calloutTimer.current) clearTimeout(calloutTimer.current);
       if (eggComfortTimer.current) clearTimeout(eggComfortTimer.current);
       if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
-      if (steadyMoodTimer.current) clearTimeout(steadyMoodTimer.current);
     };
   }, []);
   const generation = useRef(0),
@@ -376,7 +371,7 @@ function CompanionPanel({
   }, [refresh]);
   useEffect(() => {
     if (!reaction) return;
-    const timer = setTimeout(() => setReaction(''), 1800);
+    const timer = setTimeout(() => setReaction(null), 1800);
     return () => clearTimeout(timer);
   }, [reaction]);
   useEffect(() => {
@@ -406,18 +401,8 @@ function CompanionPanel({
       if (current === generation.current) setSending(false);
     }
   }
-  async function feedback(kind: string, quick = false) {
+  async function feedback(kind: PetFeedback, quick = false) {
     let comfort = '';
-    if (quick) {
-      setSteadyMood(
-        state?.presence?.mood ?? fallbackMood(state?.progress.status),
-      );
-      if (steadyMoodTimer.current) clearTimeout(steadyMoodTimer.current);
-      steadyMoodTimer.current = setTimeout(() => setSteadyMood(null), 6500);
-    } else {
-      setSteadyMood(null);
-      if (steadyMoodTimer.current) clearTimeout(steadyMoodTimer.current);
-    }
     if (kind === 'egg') {
       setSlowComfort('');
       if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
@@ -428,10 +413,8 @@ function CompanionPanel({
         ];
       setEggComfort(comfort);
       if (eggComfortTimer.current) clearTimeout(eggComfortTimer.current);
-      if (quick && !uiState.current.open) native('peek');
       eggComfortTimer.current = setTimeout(() => {
         setEggComfort('');
-        if (!uiState.current.open) native('collapse');
       }, 6500);
     }
     if (kind === 'slow') {
@@ -444,10 +427,8 @@ function CompanionPanel({
         ];
       setSlowComfort(comfort);
       if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
-      if (quick && !uiState.current.open) native('peek');
       slowComfortTimer.current = setTimeout(() => {
         setSlowComfort('');
-        if (!uiState.current.open) native('collapse');
       }, 6500);
     }
     setReaction(kind);
@@ -518,15 +499,9 @@ function CompanionPanel({
     }
   }
   const busy = sending || state?.busy;
-  const mood: PetMood = steadyMood
-    ? steadyMood
-    : reaction === 'up'
-      ? 'happy'
-      : reaction === 'down' || reaction === 'egg'
-        ? 'sad'
-        : reaction === 'slow'
-          ? 'computer'
-          : (state?.presence?.mood ?? fallbackMood(state?.progress.status));
+  const mood: PetMood = reaction
+    ? feedbackMoods[reaction]
+    : (state?.presence?.mood ?? fallbackMood(state?.progress.status));
   const visibleMessages = (state?.messages ?? []).filter(
     (message) => (message.mode ?? 'task') === (btwMode ? 'casual' : 'task'),
   );
@@ -705,7 +680,7 @@ function CompanionPanel({
             </p>
           )}
           {(eggComfort || slowComfort) && (
-            <div className="pet-emotion-note" role="status">
+            <output className="pet-emotion-note">
               <span aria-hidden="true">{eggComfort ? '🥚' : '🐢'}</span>
               <div>
                 <strong>
@@ -713,7 +688,7 @@ function CompanionPanel({
                 </strong>
                 <p>{eggComfort || slowComfort}</p>
               </div>
-            </div>
+            </output>
           )}
           <form
             className="pet-input"
@@ -998,14 +973,7 @@ export function CompanionWidget(props: {
   standalone?: boolean;
 }) {
   const [open, setOpen] = useState(!!props.standalone);
-  return (
-    <CompanionPanel
-      key={props.sessionId ?? 'no-task'}
-      {...props}
-      open={open}
-      setOpen={setOpen}
-    />
-  );
+  return <CompanionPanel {...props} open={open} setOpen={setOpen} />;
 }
 
 function EvidenceReader({

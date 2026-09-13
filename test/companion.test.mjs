@@ -102,6 +102,16 @@ test("companion presence maps task lifecycle to robot moods without suggesting q
   s.status = "failed";
   snapshot = h.companion.snapshot(s.id);
   assert.equal(snapshot.presence.mood, "sad");
+
+  for (const [kind, mood] of [
+    ["up", "happy"],
+    ["down", "sad"],
+    ["egg", "wink"],
+    ["slow", "computer"],
+  ]) {
+    h.companion.feedback(s.id, { kind, target: { type: "task", id: s.id } });
+    assert.equal(h.companion.snapshot(s.id).presence.mood, mood);
+  }
 });
 test("companion rejects concurrent chats and cancels owned calls", async (t) => {
   const { h, s } = setup(t);

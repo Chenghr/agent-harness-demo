@@ -83,7 +83,13 @@ type Profile = {
   contextWindow: number;
   protocol: string;
 };
-type Scenario = { id: string; name: string; subtitle: string; prompt: string };
+type Scenario = {
+  id: string;
+  name: string;
+  subtitle: string;
+  prompt: string;
+  icon: string;
+};
 type Agent = {
   imageModelId?: string;
   pendingModel?: string;

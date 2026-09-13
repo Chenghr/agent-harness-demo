@@ -311,7 +311,6 @@
 }
 .companion-standalone.pet-web-positioning {
   position: fixed;
-  width: auto;
   min-height: 0;
   display: block;
   flex: none;
@@ -322,7 +321,12 @@
   max-height: min(620px, calc(100dvh - 20px));
 }
 .pet-web-positioning .pet-dock {
-  min-width: 240px;
+  width: 100%;
+  min-width: 0;
+}
+.companion.pet-web-positioning {
+  /* Keep the robot's right-hand anchor stable when bubbles appear or vanish. */
+  width: min(380px, calc(100vw - 16px));
 }
 .companion:not(.companion-standalone).pet-web-positioning {
   padding-bottom: 22px;
@@ -519,7 +523,6 @@ body:has(.pet-standalone-page) {
 .pet-character:hover {
   background: transparent !important;
   filter: drop-shadow(0 15px 16px rgba(4, 44, 76, 0.26));
-  transform: translateY(-2px) scale(1.03);
 }
 
 .pet-face {
@@ -903,36 +906,36 @@ body:has(.pet-standalone-page) {
 
 @keyframes robot-idle {
   50% {
-    transform: translateY(-3px) rotate(0.8deg);
+    transform: rotate(0.8deg) scale(1.01);
   }
 }
 
 @keyframes robot-computer {
   50% {
-    transform: translateY(-2px) scale(1.015);
+    transform: scale(1.015);
     filter: drop-shadow(0 0 7px rgba(51, 216, 235, 0.24));
   }
 }
 
 @keyframes robot-happy {
   45% {
-    transform: translateY(-10px) scale(1.04);
+    transform: scale(1.04);
   }
 }
 
 @keyframes robot-jump {
   42% {
-    transform: translateY(-16px) rotate(-2deg);
+    transform: rotate(-2deg) scale(1.035);
   }
 
   72% {
-    transform: translateY(1px) scaleY(0.96);
+    transform: scaleY(0.96);
   }
 }
 
 @keyframes robot-sad {
   50% {
-    transform: translateY(3px) rotate(-1.3deg) scale(0.985);
+    transform: rotate(-1.3deg) scale(0.985);
   }
 }
 

@@ -12,6 +12,7 @@ export type Entry = {
   enabled?: boolean;
   simulated?: boolean;
   path?: { id: string; name: string }[];
+  count?: number;
 };
 export type View = Directory & {
   items: Entry[];

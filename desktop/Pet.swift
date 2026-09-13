@@ -54,7 +54,8 @@ final class PetApp: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKN
         let visible = window.screen?.visibleFrame ?? NSScreen.main!.visibleFrame
         let x = max(visible.minX,min(old.maxX-size.width,visible.maxX-size.width))
         let y = max(visible.minY,min(old.minY,visible.maxY-size.height))
-        window.setFrame(NSRect(origin:NSPoint(x:x,y:y),size:size),display:true,animate:true)
+        // Keep the pet's screen anchor visually fixed while its panel changes size.
+        window.setFrame(NSRect(origin:NSPoint(x:x,y:y),size:size),display:true,animate:false)
     }
     func userContentController(_ userContentController: WKUserContentController,didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame,
