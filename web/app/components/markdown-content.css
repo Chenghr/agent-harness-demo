@@ -1,0 +1,127 @@
+.markdown-content {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre,
+.markdown-content table {
+  margin: 0.6em 0;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4 {
+  margin: 1em 0 0.45em;
+  color: inherit;
+  line-height: 1.4;
+  font-weight: 650;
+}
+
+.markdown-content h1 {
+  font-size: 1.35em;
+}
+
+.markdown-content h2 {
+  font-size: 1.2em;
+}
+
+.markdown-content h3,
+.markdown-content h4 {
+  font-size: 1.05em;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.5em;
+}
+
+.markdown-content li + li {
+  margin-top: 0.25em;
+}
+
+.markdown-content li > p {
+  margin: 0.2em 0;
+}
+
+.markdown-content blockquote {
+  padding: 0.2em 0 0.2em 0.85em;
+  border-left: 3px solid color-mix(in srgb, currentColor 22%, transparent);
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+.markdown-content code {
+  padding: 0.12em 0.38em;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.88em;
+}
+
+.markdown-content pre {
+  max-width: 100%;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 9px;
+  background: #f7f8f6;
+  white-space: pre;
+}
+
+.markdown-content pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.markdown-content a {
+  color: var(--brand, #256b67);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.markdown-content th {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  font-weight: 650;
+}
+
+.markdown-content hr {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.markdown-content input[type='checkbox'] {
+  margin-right: 0.4em;
+}

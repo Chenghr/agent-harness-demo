@@ -172,6 +172,9 @@ export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
               <option value="b64-compatible">
                 兼容 Images API（指定 b64_json）
               </option>
+              <option value="dashscope-multimodal">
+                阿里云百炼（多模态生成）
+              </option>
             </select>
           </label>
           <label>

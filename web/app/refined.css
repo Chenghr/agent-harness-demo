@@ -491,6 +491,16 @@ textarea:focus-visible {
   line-height: 1.8;
 }
 
+.message-text-streaming {
+  position: relative;
+}
+
+.message-text-streaming .cursor {
+  display: inline-block;
+  margin-left: 3px;
+  vertical-align: text-bottom;
+}
+
 .message-user {
   flex-direction: row-reverse;
 }
@@ -610,6 +620,29 @@ textarea:focus-visible {
   color: var(--ink-secondary) !important;
   background: var(--surface-subtle) !important;
   font-size: 11px !important;
+}
+
+.model-select-content {
+  min-width: 250px !important;
+  padding: 5px;
+}
+
+.model-group-label {
+  padding: 7px 8px 4px !important;
+  color: var(--ink-faint) !important;
+  font-size: 9px !important;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.model-option small {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 9px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer > .permission-control {

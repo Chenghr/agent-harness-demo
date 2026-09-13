@@ -55,7 +55,8 @@ export class DeliveryConfig {
     if (kind === "image") {
       if (typeof v.model !== "string" || !v.model.trim() || v.model.length > 200)
         fail("请填写图片模型 ID");
-      if (!["gpt-image", "b64-compatible"].includes(v.protocol)) fail("未知图片协议");
+      if (!["gpt-image", "b64-compatible", "dashscope-multimodal"].includes(v.protocol))
+        fail("未知图片协议");
       Object.assign(record, { model: v.model.trim(), protocol: v.protocol, size: "1024x1024" });
     } else {
       if (typeof v.siteId !== "string" || !/^[a-zA-Z0-9.-]{1,150}$/.test(v.siteId))

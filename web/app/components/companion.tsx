@@ -12,6 +12,7 @@ import {
   GripHorizontal,
 } from 'lucide-react';
 import './companion.css';
+import { MarkdownContent } from './markdown-content';
 type Evidence = {
   seq: number;
   type: string;
@@ -94,7 +95,16 @@ function native(action: string) {
       messageHandlers?: { pet?: { postMessage: (v: string) => void } };
     };
   };
-  w.webkit?.messageHandlers?.pet?.postMessage(action);
+  const bridge = w.webkit?.messageHandlers?.pet;
+  if (!bridge) return false;
+  bridge.postMessage(action);
+  return true;
+}
+function hasNativeBridge() {
+  const w = window as unknown as {
+    webkit?: { messageHandlers?: { pet?: unknown } };
+  };
+  return !!w.webkit?.messageHandlers?.pet;
 }
 const petAssets: Record<PetMood, string> = {
   computer: '/assets/pet/robot-computer.png',
@@ -148,6 +158,7 @@ function CompanionPanel({
   open: boolean;
   setOpen: (v: boolean | ((old: boolean) => boolean)) => void;
 }) {
+  type PetPosition = { x: number; y: number };
   const [state, setState] = useState<PetState | null>(null),
     [text, setText] = useState(''),
     [sending, setSending] = useState(false),
@@ -162,8 +173,18 @@ function CompanionPanel({
     [callout, setCallout] = useState(''),
     [btwMode, setBtwMode] = useState(false),
     [eggComfort, setEggComfort] = useState(''),
-    [slowComfort, setSlowComfort] = useState('');
+    [slowComfort, setSlowComfort] = useState(''),
+    [position, setPosition] = useState<PetPosition | null>(null),
+    [dragging, setDragging] = useState(false);
   const lifetime = useRef(new AbortController()),
+    companionRef = useRef<HTMLDivElement>(null),
+    dragRef = useRef<{
+      pointerId: number;
+      startX: number;
+      startY: number;
+      originX: number;
+      originY: number;
+    } | null>(null),
     noticeSeen = useRef(''),
     calloutTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     eggComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
@@ -171,6 +192,89 @@ function CompanionPanel({
     eggCount = useRef(0),
     slowCount = useRef(0),
     uiState = useRef({ quiet, open });
+  const positionStorageKey = standalone
+    ? 'yi-work-pet-position-standalone'
+    : 'yi-work-pet-position-workspace';
+  const clampPosition = useCallback((next: PetPosition): PetPosition => {
+    const rect = companionRef.current?.getBoundingClientRect();
+    const width = rect?.width ?? 104;
+    const height = rect?.height ?? 104;
+    const margin = 8;
+    return {
+      x: Math.min(
+        Math.max(margin, next.x),
+        Math.max(margin, window.innerWidth - width - margin),
+      ),
+      y: Math.min(
+        Math.max(margin, next.y),
+        Math.max(margin, window.innerHeight - height - margin),
+      ),
+    };
+  }, []);
+  useEffect(() => {
+    if (hasNativeBridge()) return;
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(positionStorageKey) ?? 'null',
+      ) as PetPosition | null;
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y))
+        requestAnimationFrame(() => setPosition(clampPosition(saved)));
+    } catch {
+      localStorage.removeItem(positionStorageKey);
+    }
+  }, [clampPosition, positionStorageKey]);
+  useEffect(() => {
+    if (!position) return;
+    const frame = requestAnimationFrame(() =>
+      setPosition((current) => (current ? clampPosition(current) : current)),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [open, clampPosition]);
+  useEffect(() => {
+    const keepVisible = () =>
+      setPosition((current) => (current ? clampPosition(current) : current));
+    window.addEventListener('resize', keepVisible);
+    return () => window.removeEventListener('resize', keepVisible);
+  }, [clampPosition]);
+  function startDrag(event: React.PointerEvent<HTMLElement>) {
+    if (event.button !== 0) return;
+    if (native('drag')) return;
+    const rect = companionRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const origin = clampPosition({ x: rect.left, y: rect.top });
+    setPosition(origin);
+    setDragging(true);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: origin.x,
+      originY: origin.y,
+    };
+  }
+  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    setPosition(
+      clampPosition({
+        x: drag.originX + event.clientX - drag.startX,
+        y: drag.originY + event.clientY - drag.startY,
+      }),
+    );
+  }
+  function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    setPosition((current) => {
+      if (current) localStorage.setItem(positionStorageKey, JSON.stringify(current));
+      return current;
+    });
+  }
   useEffect(() => {
     uiState.current = { quiet, open };
   }, [quiet, open]);
@@ -375,7 +479,16 @@ function CompanionPanel({
   }
   return (
     <div
-      className={`companion ${standalone ? 'companion-standalone' : ''} pet-presence-${state?.presence?.activity ?? 'resting'} ${reaction ? `pet-reacting-${reaction}` : ''}`}
+      ref={companionRef}
+      className={`companion ${standalone ? 'companion-standalone' : ''} ${dragging ? 'pet-dragging' : ''} pet-presence-${state?.presence?.activity ?? 'resting'} ${reaction ? `pet-reacting-${reaction}` : ''}`}
+      style={
+        position
+          ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' }
+          : undefined
+      }
+      onPointerMove={moveDrag}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
     >
       {open && (
         <section
@@ -385,8 +498,8 @@ function CompanionPanel({
           <header>
             <span
               className="pet-panel-title"
-              onPointerDown={() => native('drag')}
-              title="拖动桌面窗口"
+              onPointerDown={startDrag}
+              title="拖动小艺"
             >
               <PetFace mood={mood} />
               <span>
@@ -478,10 +591,13 @@ function CompanionPanel({
                       })
                     : ''}
                 </span>
-                <p>{m.text}</p>
+                <MarkdownContent
+                  className="pet-message-content"
+                  content={m.text}
+                />
                 {(m.stale ||
                   (m.statusAtRead &&
-                    m.statusAtRead !== state.progress.status)) && (
+                    m.statusAtRead !== state?.progress.status)) && (
                   <small>本回答依据当时的任务状态；当前进展以顶部为准。</small>
                 )}
                 {!!m.sources?.length && (
@@ -736,15 +852,14 @@ function CompanionPanel({
             🐢
           </button>
         </div>
-        {standalone && (
-          <button
-            className="pet-drag"
-            aria-label="拖动小艺"
-            onPointerDown={() => native('drag')}
-          >
-            <GripHorizontal size={15} />
-          </button>
-        )}
+        <button
+          className="pet-drag"
+          aria-label="拖动小艺"
+          title="按住拖动，位置会自动保存"
+          onPointerDown={startDrag}
+        >
+          <GripHorizontal size={15} />
+        </button>
         {!quiet && !open && (
           <button
             className={`pet-bubble ${eggComfort ? 'pet-bubble-egg' : ''} ${slowComfort ? 'pet-bubble-slow' : ''}`}

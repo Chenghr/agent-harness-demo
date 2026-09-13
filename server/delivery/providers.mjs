@@ -20,7 +20,69 @@ async function json(response, maxBytes = 32 * 1024 * 1024) {
   }
 }
 const headers = (p) => (p.apiKey ? { Authorization: `Bearer ${p.apiKey}` } : {});
+async function imageBytes(response, maxBytes = 32 * 1024 * 1024) {
+  if (!response.ok)
+    throw new HarnessError(
+      "PROVIDER_HTTP",
+      `图片下载返回 HTTP ${response.status}，未记录响应中的敏感信息`,
+    );
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of response.body) {
+    total += chunk.length;
+    if (total > maxBytes) throw new HarnessError("PROVIDER_LIMIT", "外部服务返回的图片过大");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+function imageType(bytes) {
+  if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
+    return { mime: "image/png", extension: "png" };
+  if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255)
+    return { mime: "image/jpeg", extension: "jpg" };
+  if (
+    bytes.toString("ascii", 0, 4) === "RIFF" &&
+    bytes.toString("ascii", 8, 12) === "WEBP"
+  )
+    return { mime: "image/webp", extension: "webp" };
+  throw new HarnessError("PROVIDER_PROTOCOL", "出图结果不是 PNG、JPEG 或 WebP");
+}
 export async function generateImage(profile, prompt, signal, fetcher = fetch) {
+  if (profile.protocol === "dashscope-multimodal") {
+    const data = await json(
+      await fetcher(profile.baseUrl, {
+        method: "POST",
+        headers: { ...headers(profile), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: profile.model,
+          input: { messages: [{ role: "user", content: [{ text: prompt }] }] },
+          parameters: { prompt_extend: true },
+        }),
+        signal,
+        redirect: "error",
+      }),
+    );
+    const imageUrl = data.output?.choices?.[0]?.message?.content?.find(
+      (item) => typeof item?.image === "string",
+    )?.image;
+    let parsed;
+    try {
+      parsed = new URL(imageUrl);
+    } catch {
+      throw new HarnessError("PROVIDER_PROTOCOL", "百炼出图服务未返回有效图片地址");
+    }
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      !(parsed.hostname === "aliyuncs.com" || parsed.hostname.endsWith(".aliyuncs.com"))
+    )
+      throw new HarnessError("PROVIDER_PROTOCOL", "百炼出图服务返回了不受信任的图片地址");
+    const bytes = await imageBytes(
+      await fetcher(parsed.href, { signal, redirect: "error" }),
+    );
+    return { bytes, ...imageType(bytes) };
+  }
   const body = { model: profile.model, prompt, n: 1, size: profile.size };
   if (profile.protocol === "b64-compatible") body.response_format = "b64_json";
   const data = await json(
@@ -39,21 +101,7 @@ export async function generateImage(profile, prompt, signal, fetcher = fetch) {
       "图片服务须返回 b64_json；不自动下载第三方图片链接",
     );
   const bytes = Buffer.from(b64, "base64");
-  let mime, extension;
-  if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
-    mime = "image/png";
-    extension = "png";
-  } else if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
-    mime = "image/jpeg";
-    extension = "jpg";
-  } else if (
-    bytes.toString("ascii", 0, 4) === "RIFF" &&
-    bytes.toString("ascii", 8, 12) === "WEBP"
-  ) {
-    mime = "image/webp";
-    extension = "webp";
-  } else throw new HarnessError("PROVIDER_PROTOCOL", "出图结果不是 PNG、JPEG 或 WebP");
-  return { bytes, mime, extension };
+  return { bytes, ...imageType(bytes) };
 }
 export async function deploySite(
   profile,

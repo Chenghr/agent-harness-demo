@@ -375,6 +375,36 @@ test("local HTTP image adapter and preview response use the real wire protocol a
   assert.deepEqual(Buffer.from(await bytes.arrayBuffer()), png);
 });
 
+test("DashScope multimodal image adapter sends native payload and stores the returned image", async (t) => {
+  const requests = [];
+  const fetcher = async (url, init = {}) => {
+    requests.push({ url, ...init });
+    if (url === "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation")
+      return Response.json({
+        output: {
+          choices: [{ message: { content: [{ image: "https://result.oss-cn-beijing.aliyuncs.com/generated.png" }] } }],
+        },
+      });
+    return new Response(png, { headers: { "Content-Type": "image/png" } });
+  };
+  const { h, s, a, image } = setup(t, { fetcher });
+  h.delivery.config.save("image", {
+    ...image,
+    baseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+    model: "qwen-image-3.0",
+    protocol: "dashscope-multimodal",
+  });
+  a.imageModelId = h.delivery.config.list().images.at(-1).id;
+  const asset = await generate(h, s, a, "虚构机器人在工作台前");
+  const payload = JSON.parse(requests[0].body);
+  assert.equal(requests[0].url, h.delivery.config.list().images.at(-1).baseUrl);
+  assert.equal(payload.model, "qwen-image-3.0");
+  assert.match(payload.input.messages[0].content[0].text, /统一暖色纸艺风格/);
+  assert.equal(payload.parameters.prompt_extend, true);
+  assert.equal(requests[1].url, "https://result.oss-cn-beijing.aliyuncs.com/generated.png");
+  assert.equal(asset.mime, "image/png");
+});
+
 test("a child's image model switch pins the current request and affects only its next generation", async (t) => {
   let release,
     entered = false;

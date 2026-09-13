@@ -11,6 +11,9 @@
     sans-serif;
   --pet-line: #e6e5e0;
 }
+.companion.pet-dragging {
+  user-select: none;
+}
 .companion button {
   display: inline-flex;
   align-items: center;
@@ -148,6 +151,16 @@
   background: #f4f4f0;
   padding: 7px 10px;
   border-radius: 6px;
+}
+.pet-msg-user .pet-message-content {
+  margin-top: 3px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #f4f4f0;
+}
+.pet-msg-user .pet-message-content p {
+  padding: 0;
+  background: transparent;
 }
 .pet-msg details {
   margin-top: 8px;
@@ -353,6 +366,14 @@ body:has(.pet-standalone-page) {
 .pet-drag {
   color: #a6aa9e !important;
   cursor: grab !important;
+  touch-action: none;
+}
+.pet-drag:active,
+.pet-panel-title:active {
+  cursor: grabbing !important;
+}
+.pet-panel-title {
+  touch-action: none;
 }
 .native-pet .companion-standalone .pet-panel {
   max-height: calc(100dvh - 165px);
@@ -647,6 +668,16 @@ body:has(.pet-standalone-page) {
   border: 1px solid #dceaf0;
   border-radius: 10px 10px 3px 10px;
   background: #f1f8fa;
+}
+.pet-msg-user .pet-message-content {
+  border: 1px solid #dceaf0;
+  border-radius: 10px 10px 3px 10px;
+  background: #f1f8fa;
+}
+.pet-msg-user .pet-message-content p {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .pet-input {

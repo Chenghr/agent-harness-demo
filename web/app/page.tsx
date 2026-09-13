@@ -40,6 +40,7 @@ import {
   Workflow,
   X,
 } from 'lucide-react';
+import { MarkdownContent } from './components/markdown-content';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -54,7 +55,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -73,6 +77,7 @@ import {
 type Profile = {
   id: string;
   label: string;
+  providerName?: string;
   simulated: boolean;
   configured: boolean;
   contextWindow: number;
@@ -558,6 +563,9 @@ export default function Home() {
   const active = !!session && activeStates.includes(session.status);
   const context = main?.context;
   const profile = config?.models.find((p) => p.id === model);
+  const demoModels = config?.models.filter((item) => item.simulated) ?? [];
+  const realModels =
+    config?.models.filter((item) => !item.simulated && item.configured) ?? [];
   const approvals =
     session?.approvals.filter((a) => a.status === 'pending') ?? [];
   const visibleEvents = events.length
@@ -886,7 +894,10 @@ export default function Home() {
                       </span>
                       <time>{clock(m.time)}</time>
                     </div>
-                    <div className="message-text">{m.text}</div>
+                    <MarkdownContent
+                      className="message-text"
+                      content={m.text}
+                    />
                   </div>
                 </article>
               ))}
@@ -900,8 +911,8 @@ export default function Home() {
                       <strong>主助手</strong>
                       <span>生成中</span>
                     </div>
-                    <div className="message-text">
-                      {streaming}
+                    <div className="message-text message-text-streaming">
+                      <MarkdownContent content={streaming} />
                       <span className="cursor" />
                     </div>
                   </div>
@@ -1113,17 +1124,47 @@ export default function Home() {
                           'Demo · 标准'}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
-                      {config?.models.map((m) => (
-                        <SelectItem
-                          key={m.id}
-                          value={m.id}
-                          disabled={!m.configured}
-                        >
-                          {m.label}
-                          {!m.configured ? ' · 未配置' : ''}
-                        </SelectItem>
-                      ))}
+                    <SelectContent
+                      className="model-select-content"
+                      side="top"
+                      sideOffset={6}
+                      align="start"
+                      alignItemWithTrigger={false}
+                    >
+                      <SelectGroup>
+                        <SelectLabel className="model-group-label">
+                          演示模型
+                        </SelectLabel>
+                        {demoModels.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel className="model-group-label">
+                          真实模型
+                        </SelectLabel>
+                        {realModels.length ? (
+                          realModels.map((item) => (
+                            <SelectItem
+                              className="model-option"
+                              key={item.id}
+                              value={item.id}
+                            >
+                              <span>{item.label}</span>
+                              {item.providerName && (
+                                <small>{item.providerName}</small>
+                              )}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="unconfigured-real-model" disabled>
+                            尚未配置真实模型
+                          </SelectItem>
+                        )}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                   <div className="send-controls">
