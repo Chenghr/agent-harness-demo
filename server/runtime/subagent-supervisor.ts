@@ -9,6 +9,8 @@ export interface SpawnRequest {
   files?: string[];
   artifacts?: string[];
   images?: string[];
+  media?: string[];
+  previews?: string[];
   background?: string;
   expectedOutput?: string;
   reason?: string;

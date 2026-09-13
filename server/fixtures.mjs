@@ -1,6 +1,7 @@
 import { PRIVACY_SOURCE, PRIVACY_RULES } from "./privacy-demo.mjs";
 import fs from "node:fs";
 import path from "node:path";
+import { TEACHER_DAY_MEMBERS, TEACHER_DAY_PROMPT } from "./teacher-day-demo.mjs";
 
 export const BROKEN_CART = `export function total(items, discount = 0) {\n  const subtotal = items.reduce((sum, item) => sum + item.price, 0);\n  return Math.round(subtotal * (1 - discount) * 100) / 100;\n}\n`;
 export const FIXED_CART = `export function total(items, discount = 0) {\n  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);\n  return Math.round(subtotal * (1 - discount) * 100) / 100;\n}\n`;
@@ -13,6 +14,17 @@ export function createWorkspace(root, sessionId, scenario = "full") {
     fs.writeFileSync(path.join(dir, "rules.md"), PRIVACY_RULES);
     return dir;
   }
+  if (scenario === "teacher-day") {
+    fs.writeFileSync(
+      path.join(dir, "members.json"),
+      JSON.stringify(TEACHER_DAY_MEMBERS, null, 2) + "\n",
+    );
+    fs.writeFileSync(
+      path.join(dir, "README.md"),
+      "# 小艺新程 · 师恩相伴\n\n八位小艺新人写给导师的完整感谢位于 members.json。生成原创虚构头像，先创建栏目丰富的固定预览，再由用户决定是否发布。\n",
+    );
+    return dir;
+  }
   fs.writeFileSync(path.join(dir, "cart.mjs"), BROKEN_CART);
   fs.writeFileSync(path.join(dir, "cart.test.mjs"), CART_TEST);
   fs.writeFileSync(
@@ -23,6 +35,18 @@ export function createWorkspace(root, sessionId, scenario = "full") {
 }
 
 export const SCENARIOS = [
+  {
+    id: "teacher-day",
+    name: "小艺新程 · 师恩相伴",
+    cardName: "教师节感谢网站一键制作",
+    subtitle: "八位小艺新人写给导师的工作与生活感谢",
+    prompt: TEACHER_DAY_PROMPT,
+    icon: "sparkles",
+    realOnly: true,
+    requiresImage: true,
+    requiresMusic: true,
+    requiresVideo: true,
+  },
   {
     id: "privacy",
     name: "隐私实体数据集",

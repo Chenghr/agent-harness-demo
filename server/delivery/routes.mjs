@@ -5,6 +5,7 @@ export async function deliveryRoute(h, s, parts, method, read) {
   if (method === "POST") {
     const body = await read();
     if (parts[3] === "select") return service.select(s, body.assetId);
+    if (parts[3] === "select-media") return service.selectMedia(s, body.mediaId);
     if (parts[3] === "requirements") return service.requirements(s, body);
     if (parts[3] === "request-publish")
       return service.requestPublish(s, s.agents.main, body.previewId);

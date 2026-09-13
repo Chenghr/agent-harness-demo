@@ -41,6 +41,13 @@ import { createWorkspace, SCENARIOS } from "./fixtures.mjs";
 import { createTaskController } from "./runtime-adapter.mjs";
 import { terminalStatuses as terminal } from "./runtime/contracts.ts";
 import { CompletionChecks } from "./completion-checks.mjs";
+import { TEACHER_DAY_REQUIREMENTS } from "./teacher-day-demo.mjs";
+
+// "只读取某个文件" limits the current operation; it does not make the whole
+// session read-only. Keep explicit session-wide read-only wording separate.
+const READ_ONLY_INTENT =
+  /先不要修改|只分析|只读(?!取)|不要修改文件|不要修改实现|只给分析|只给建议|不要改文件|也先不要修改/;
+const WRITE_ALLOWED_INTENT = /允许修改|可以修改|现在修复|继续修复/;
 
 export class Harness extends EventEmitter {
   constructor({
@@ -131,6 +138,8 @@ export class Harness extends EventEmitter {
       version: "1.0.0",
       models: this.models.list(),
       imageModels: this.delivery.config.list().images,
+      musicModel: this.delivery.config.list().music,
+      videoModel: this.delivery.config.list().video,
       counts: this.catalog.counts(),
       scenarios: SCENARIOS,
       workspaces: this.workspaces.list(),
@@ -210,7 +219,7 @@ export class Harness extends EventEmitter {
     permissionMode = "ask",
   } = {}) {
     if (this.shuttingDown) throw new HarnessError("CLOSING", "服务正在关闭");
-    this.models.get(model);
+    const modelProfile = this.models.get(model);
     if (!PERMISSION_MODES.includes(permissionMode))
       throw new HarnessError("INVALID_ARGUMENT", "未知权限模式");
     if (workspaceId) {
@@ -218,6 +227,14 @@ export class Harness extends EventEmitter {
       scenario = "workspace";
     } else permissionMode = "ask";
     const selected = SCENARIOS.find((s) => s.id === scenario);
+    if (selected?.realOnly && modelProfile.simulated)
+      throw new HarnessError("MODEL_REQUIRED", "此案例需要先选择已配置且支持工具调用的真实模型");
+    if (selected?.requiresImage && !this.delivery.config.list().images.length)
+      throw new HarnessError("DELIVERY_CONFIG", "此案例需要先配置可用的图片模型");
+    if (selected?.requiresMusic && !this.delivery.config.list().music)
+      throw new HarnessError("DELIVERY_CONFIG", "此案例需要先配置可用的音乐生成模型");
+    if (selected?.requiresVideo && !this.delivery.config.list().video)
+      throw new HarnessError("DELIVERY_CONFIG", "此案例需要先配置可用的视频生成模型");
     prompt = String(prompt || selected?.prompt || "请分析购物车测试失败的原因。").trim();
     if (!prompt || prompt.length > 10000)
       throw new HarnessError("INVALID_ARGUMENT", "任务消息需要在 1 到 10000 字符之间");
@@ -235,9 +252,7 @@ export class Harness extends EventEmitter {
       workspaceId,
       permissionMode,
       closing: false,
-      readOnly: /先不要修改|只分析|只读|不要修改文件|不要修改实现|只给分析|也先不要修改/.test(
-        prompt,
-      ),
+      readOnly: READ_ONLY_INTENT.test(prompt),
       userRequirements: [prompt],
       agents: {},
       chat: [],
@@ -259,6 +274,10 @@ export class Harness extends EventEmitter {
     this.context.add(session, a, [{ role: "user", content: prompt }]);
     this.chat(session, "user", prompt);
     this.event(session, "session.created", { scenario, model });
+    if (scenario === "teacher-day") {
+      this.capabilityLoader.load(session, a, "skill", "teacher-day-orchestrator");
+      this.delivery.requirements(session, structuredClone(TEACHER_DAY_REQUIREMENTS));
+    }
     this.store.save(session);
     if (autoStart) this.launch(session, a);
     return this.snapshot(session.id);
@@ -278,6 +297,8 @@ export class Harness extends EventEmitter {
         pendingModel: a.pendingModel,
         imageModelId: a.imageModelId,
         assignedImageIds: a.assignedImageIds,
+        assignedMediaIds: a.assignedMediaIds,
+        assignedPreviewIds: a.assignedPreviewIds,
         epoch: a.epoch,
         loadedTools: a.loadedTools,
         loadedSkills: a.loadedSkills,
@@ -500,7 +521,7 @@ export class Harness extends EventEmitter {
       this.event(s, "tool.started", { tool: name, args, callId }, a.id);
       const execute = () => this.execute(s, a, name, args, signal, epoch, action);
       const result =
-        ["run_tests", "run_diagnostic", "shell_run", "image_generate"].includes(name) ||
+        ["run_tests", "run_diagnostic", "shell_run", "image_generate", "music_generate", "video_generate"].includes(name) ||
         definition.adapter === "node-command-v1"
           ? await this.toolSlots.run(execute, signal)
           : await execute();
@@ -665,8 +686,13 @@ export class Harness extends EventEmitter {
     const workspace = this.workspace(s, a);
     if (name === "image_models") return { models: this.delivery.config.list().images };
     if (name === "image_generate") return this.delivery.generate(s, a, args, signal, epoch);
+    if (name === "music_models") return { models: [this.delivery.config.list().music].filter(Boolean) };
+    if (name === "music_generate") return this.delivery.generateMusic(s, a, args, signal, epoch);
+    if (name === "video_models") return { models: [this.delivery.config.list().video].filter(Boolean) };
+    if (name === "video_generate") return this.delivery.generateVideo(s, a, args, signal, epoch);
     if (name === "site_preview") return this.delivery.preview(s, a, args);
     if (name === "greeting_site") return this.delivery.greeting(s, a, args);
+    if (name === "greeting_review") return this.delivery.reviewGreeting(s, a, args.previewId);
     if (name === "site_request_publish") return this.delivery.requestPublish(s, a, args.previewId);
     if (
       s.workspaceId &&
@@ -1027,6 +1053,8 @@ export class Harness extends EventEmitter {
       files: old.delegation.materials.filter(m => m.sourcePath).map(m => m.sourcePath),
       artifacts: old.delegation.artifactIds,
       images: old.assignedImageIds ?? [],
+      media: old.assignedMediaIds ?? [],
+      previews: old.assignedPreviewIds ?? [],
       background: old.delegation.background, expectedOutput: old.delegation.expectedOutput,
       mode: "background",
     };
@@ -1060,13 +1088,11 @@ export class Harness extends EventEmitter {
     s.userRequirements.push(text);
     s.revision++;
     this.chat(s, "user", text);
-    if (
-      /先不要修改|只分析|只读|不要修改文件|不要修改实现|只给分析|只给建议|不要改文件/.test(text)
-    ) {
+    if (READ_ONLY_INTENT.test(text)) {
       s.readOnly = true;
       this.revoke(sid);
     }
-    if (/允许修改|可以修改|现在修复|继续修复/.test(text)) s.readOnly = false;
+    if (WRITE_ALLOWED_INTENT.test(text)) s.readOnly = false;
     const controller = this.controller(s, a);
     const continuing = !controller.running || controller.isTerminal;
     if (continuing) {

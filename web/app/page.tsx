@@ -35,6 +35,7 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  Sparkles,
   Square,
   Terminal,
   Workflow,
@@ -86,14 +87,21 @@ type Profile = {
 type Scenario = {
   id: string;
   name: string;
+  cardName?: string;
   subtitle: string;
   prompt: string;
   icon: string;
+  realOnly?: boolean;
+  requiresImage?: boolean;
+  requiresMusic?: boolean;
+  requiresVideo?: boolean;
 };
 type Agent = {
   imageModelId?: string;
   pendingModel?: string;
   assignedImageIds?: string[];
+  assignedMediaIds?: string[];
+  assignedPreviewIds?: string[];
   id: string;
   parentId: string | null;
   goal: string;
@@ -216,6 +224,8 @@ type CatalogItem = {
 };
 type Config = {
   imageModels?: { id: string; name: string; model: string }[];
+  musicModel?: { id: string; name: string; model: string } | null;
+  videoModel?: { id: string; name: string; model: string } | null;
   workspaces?: Workspace[];
   models: Profile[];
   assistants?: {
@@ -264,6 +274,7 @@ const activeStates = [
   'cancelling',
 ];
 const scenarioIcons: Record<string, typeof Workflow> = {
+  sparkles: Sparkles,
   dataset: FileText,
   workflow: Workflow,
   pause: Pause,
@@ -807,7 +818,7 @@ export default function Home() {
                 variant="ghost"
                 onClick={() => setDeliveryOpen(true)}
               >
-                图片与网站
+                创作素材与网站
               </Button>
             )}
             {session && (
@@ -908,16 +919,50 @@ export default function Home() {
                     <div className="scenario-grid">
                       {config?.scenarios.map((s, i) => {
                         const Icon = scenarioIcons[s.icon] ?? Workflow;
+                        const unavailable =
+                          (s.realOnly && profile?.simulated !== false) ||
+                          (s.requiresImage && !config.imageModels?.length) ||
+                          (s.requiresMusic && !config.musicModel) ||
+                          (s.requiresVideo && !config.videoModel);
                         return (
                           <button
                             key={s.id}
                             className={`scenario-card ${i === 0 ? 'featured' : ''}`}
-                            onClick={() => create(s.id, s.prompt)}
-                            disabled={busy}
+                            onClick={() => {
+                              if (s.realOnly && profile?.simulated !== false) {
+                                setError('请先选择一个已配置的真实模型，再启动教师节案例。');
+                                return;
+                              }
+                              if (s.requiresImage && !config.imageModels?.length) {
+                                setError('请先在模型与运行设置中配置图片模型。');
+                                return;
+                              }
+                              if (s.requiresMusic && !config.musicModel) {
+                                setError('请先在模型与运行设置中配置音乐生成模型。');
+                                return;
+                              }
+                              if (s.requiresVideo && !config.videoModel) {
+                                setError('请先在模型与运行设置中配置视频生成模型。');
+                                return;
+                              }
+                              void create(s.id, s.prompt);
+                            }}
+                            disabled={busy || unavailable}
+                            title={
+                              unavailable
+                                ? s.realOnly && profile?.simulated !== false
+                                  ? '请先选择真实模型'
+                                  : !config.imageModels?.length
+                                    ? '请先配置图片模型'
+                                    : !config.musicModel
+                                      ? '请先配置音乐生成模型'
+                                      : '请先配置视频生成模型'
+                                : undefined
+                            }
                           >
                             <Icon size={19} />
                             <div>
-                              <strong>{s.name}</strong>
+                              <strong>{s.cardName ?? s.name}</strong>
                               <span>{s.subtitle}</span>
                             </div>
                             <ArrowRight size={16} />
@@ -2223,7 +2268,7 @@ export default function Home() {
           <DialogHeader>
             <DialogTitle>模型与运行设置</DialogTitle>
             <DialogDescription>
-              配置对话模型、出图服务与网站发布
+              配置对话、图片、音乐、视频模型与网站发布
             </DialogDescription>
           </DialogHeader>
           <RuntimeSettings onChanged={refreshConfig} />
@@ -2233,9 +2278,9 @@ export default function Home() {
       <Dialog open={deliveryOpen} onOpenChange={setDeliveryOpen}>
         <DialogContent className="settings-dialog">
           <DialogHeader>
-            <DialogTitle>图片与网站</DialogTitle>
+            <DialogTitle>创作素材与网站</DialogTitle>
             <DialogDescription>
-              查看图片版本、预览页面，并决定是否发布
+              查看图片与音视频版本、预览页面，并决定是否发布
             </DialogDescription>
           </DialogHeader>
           {selected && session?.delivery && (

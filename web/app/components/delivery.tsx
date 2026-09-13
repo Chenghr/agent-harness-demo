@@ -19,8 +19,24 @@ export type DeliveryState = {
     model: string;
     url?: string;
     error?: string;
+    retryCount?: number;
   }[];
   selections: Record<string, string>;
+  media: {
+    id: string;
+    kind: 'music' | 'video';
+    key: string;
+    slot: string;
+    version: number;
+    status: string;
+    model: string;
+    url?: string;
+    error?: string;
+    duration?: number;
+    resolution?: string;
+    externalTaskId?: string;
+  }[];
+  mediaSelections: Record<string, string>;
   previews: {
     id: string;
     title: string;
@@ -28,6 +44,14 @@ export type DeliveryState = {
     digest: string;
     files: { name: string; bytes: number }[];
     createdAt: string;
+    theme?: string;
+    layout?: string;
+    checks?: {
+      id: string;
+      label: string;
+      status: string;
+      detail: string;
+    }[];
   }[];
   publications: {
     id: string;
@@ -46,6 +70,15 @@ type ImageModel = {
   model: string;
   protocol: string;
   hasKey?: boolean;
+  maxConcurrency?: number;
+};
+type MediaModel = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  protocol: string;
+  hasKey?: boolean;
 };
 const blankImage = {
   id: '',
@@ -53,6 +86,7 @@ const blankImage = {
   baseUrl: 'https://api.openai.com/v1',
   model: '',
   protocol: 'gpt-image',
+  maxConcurrency: 2,
   apiKey: '',
 };
 const blankPublish = {
@@ -61,20 +95,46 @@ const blankPublish = {
   siteId: '',
   apiKey: '',
 };
+const blankMusic = {
+  id: '',
+  name: '腾讯 TokenHub MiniMax Music 3.0',
+  baseUrl: 'https://tokenhub.tencentmaas.com/v1/wand/minimax-music/generation',
+  model: 'minimax-music-v3.0',
+  protocol: 'tokenhub-minimax-music',
+  apiKey: '',
+};
+const blankVideo = {
+  id: '',
+  name: '百炼 Wan 3.0 Video',
+  baseUrl:
+    'https://ws-f1727rbl0fr6i3pn.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis',
+  model: 'wan3.0-video-prime',
+  protocol: 'dashscope-video-async',
+  apiKey: '',
+};
 
 export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
   const [models, setModels] = useState<ImageModel[]>([]);
   const [image, setImage] = useState(blankImage),
+    [music, setMusic] = useState(blankMusic),
+    [video, setVideo] = useState(blankVideo),
     [publisher, setPublisher] = useState(blankPublish);
   const [notice, setNotice] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   useEffect(() => {
-    runtimeApi<{ images: ImageModel[]; publisher: typeof blankPublish | null }>(
+    runtimeApi<{
+      images: ImageModel[];
+      music: MediaModel | null;
+      video: MediaModel | null;
+      publisher: typeof blankPublish | null;
+    }>(
       '/settings/delivery',
     )
       .then((d) => {
         setModels(d.images);
+        if (d.music) setMusic({ ...d.music, apiKey: '' });
+        if (d.video) setVideo({ ...d.video, apiKey: '' });
         if (d.publisher) setPublisher({ ...d.publisher, apiKey: '' });
       })
       .catch((e) => setError(e.message));
@@ -84,14 +144,20 @@ export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
     setError('');
     setNotice('');
     try {
-      const d = await runtimeApi<{ images: ImageModel[] }>(
+      const d = await runtimeApi<{
+        images: ImageModel[];
+        music: MediaModel | null;
+        video: MediaModel | null;
+      }>(
         `/settings/delivery/${kind}`,
         { ...value, apiKey: value.apiKey || undefined },
       );
       setModels(d.images);
       if (kind === 'image' && d.images.at(-1))
-        setImage({ ...d.images.at(-1)!, apiKey: '' });
+        setImage({ ...d.images.at(-1)!, maxConcurrency: d.images.at(-1)!.maxConcurrency ?? 2, apiKey: '' });
       setPublisher((v) => ({ ...v, apiKey: '' }));
+      if (d.music) setMusic({ ...d.music, apiKey: '' });
+      if (d.video) setVideo({ ...d.video, apiKey: '' });
       setNotice('已保存，下次请求生效。');
       onChanged();
     } catch (e) {
@@ -103,9 +169,9 @@ export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
   return (
     <section className="delivery-settings">
       <details>
-        <summary>出图与网站发布服务</summary>
+        <summary>图片、音视频与网站发布服务</summary>
         <p>
-          图片模型与对话模型分别配置。密钥只保存在本机；留空保留已保存的密钥。
+          图片、音乐、视频模型与对话模型分别配置。密钥只保存在本机；留空保留已保存的密钥。
         </p>
         {error && <p role="alert">{error}</p>}
         {notice && <output>{notice}</output>}
@@ -124,6 +190,8 @@ export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
                 e.target.value
                   ? {
                       ...models.find((m) => m.id === e.target.value)!,
+                      maxConcurrency:
+                        models.find((m) => m.id === e.target.value)!.maxConcurrency ?? 2,
                       apiKey: '',
                     }
                   : blankImage,
@@ -186,7 +254,78 @@ export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
               onChange={(e) => setImage({ ...image, apiKey: e.target.value })}
             />
           </label>
+          <label>
+            单服务最大并发（建议百炼设为 2）
+            <input
+              type="number"
+              min={1}
+              max={4}
+              value={image.maxConcurrency ?? 2}
+              onChange={(e) =>
+                setImage({ ...image, maxConcurrency: Number(e.target.value) })
+              }
+            />
+          </label>
           <button disabled={busy}>保存出图服务</button>
+        </form>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save('music', music);
+          }}
+        >
+          <strong>背景音乐生成服务</strong>
+          <label>
+            服务名称
+            <input required value={music.name} onChange={(e) => setMusic({ ...music, name: e.target.value })} />
+          </label>
+          <label>
+            音乐 API 地址
+            <input required value={music.baseUrl} onChange={(e) => setMusic({ ...music, baseUrl: e.target.value })} />
+          </label>
+          <label>
+            音乐模型 ID
+            <input required value={music.model} onChange={(e) => setMusic({ ...music, model: e.target.value })} />
+          </label>
+          <label>
+            音乐协议
+            <select value={music.protocol} onChange={(e) => setMusic({ ...music, protocol: e.target.value })}>
+              <option value="tokenhub-minimax-music">腾讯 TokenHub（MiniMax Music）</option>
+              <option value="dashscope-music">阿里云百炼（Fun Music）</option>
+            </select>
+          </label>
+          <label>
+            音乐 API Key
+            <input type="password" autoComplete="off" value={music.apiKey} onChange={(e) => setMusic({ ...music, apiKey: e.target.value })} />
+          </label>
+          <p>生成纯器乐背景音乐；远程临时结果会立即下载为本地版本。</p>
+          <button disabled={busy}>保存音乐服务</button>
+        </form>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save('video', video);
+          }}
+        >
+          <strong>感谢视频生成服务</strong>
+          <label>
+            服务名称
+            <input required value={video.name} onChange={(e) => setVideo({ ...video, name: e.target.value })} />
+          </label>
+          <label>
+            视频 API 地址
+            <input required value={video.baseUrl} onChange={(e) => setVideo({ ...video, baseUrl: e.target.value })} />
+          </label>
+          <label>
+            视频模型 ID
+            <input required value={video.model} onChange={(e) => setVideo({ ...video, model: e.target.value })} />
+          </label>
+          <label>
+            视频 API Key
+            <input type="password" autoComplete="off" value={video.apiKey} onChange={(e) => setVideo({ ...video, apiKey: e.target.value })} />
+          </label>
+          <p>演示规格固定为约 10 秒、720P、16:9；异步任务不会盲目重复提交。</p>
+          <button disabled={busy}>保存视频服务</button>
         </form>
         <form
           onSubmit={(e) => {
@@ -245,7 +384,7 @@ export function DeliverySettings({ onChanged }: { onChanged: () => void }) {
 }
 
 const statuses: Record<string, string> = {
-  generating: '正在出图',
+  generating: '生成中',
   ready: '可用',
   failed: '失败',
   cancelled: '已停止',
@@ -367,6 +506,9 @@ export function DeliveryPanel({
             <small>
               {asset.model} · {statuses[asset.status] ?? asset.status}
             </small>
+            {!!asset.retryCount && (
+              <small className="delivery-retry">自动退避重试 {asset.retryCount} 次</small>
+            )}
             {asset.error && <p>{asset.error}</p>}
             {asset.status === 'ready' && (
               <button
@@ -376,6 +518,45 @@ export function DeliveryPanel({
                 {state.selections[asset.slot] === asset.id
                   ? '当前版本'
                   : '使用此版本'}
+              </button>
+            )}
+          </article>
+        ))}
+      </div>
+      <strong>音乐与视频版本</strong>
+      {!state.media?.length && (
+        <p>还没有媒体。教师节一键任务会生成一段背景音乐和一段感谢短片。</p>
+      )}
+      <div className="delivery-media">
+        {(state.media ?? []).map((item) => (
+          <article key={item.id}>
+            <div>
+              <strong>
+                {item.kind === 'music' ? '背景音乐' : '感谢视频'} · 第 {item.version} 版
+              </strong>
+              <small>
+                {item.model} · {statuses[item.status] ?? item.status}
+              </small>
+              {item.kind === 'video' && (
+                <small>{item.resolution ?? '720P'} · 约 {item.duration ?? 10} 秒</small>
+              )}
+              {item.externalTaskId && <small>远程任务：{item.externalTaskId}</small>}
+              {item.error && <p>{item.error}</p>}
+            </div>
+            {item.status === 'ready' && item.url && item.kind === 'music' && (
+              // oxlint-disable-next-line jsx-a11y/media-has-caption -- generated music is instrumental
+              <audio controls preload="metadata" src={item.url} />
+            )}
+            {item.status === 'ready' && item.url && item.kind === 'video' && (
+              // oxlint-disable-next-line jsx-a11y/media-has-caption -- generated video is intentionally silent
+              <video controls preload="metadata" src={item.url} />
+            )}
+            {item.status === 'ready' && (
+              <button
+                disabled={busy || state.mediaSelections?.[item.slot] === item.id}
+                onClick={() => void action('select-media', { mediaId: item.id })}
+              >
+                {state.mediaSelections?.[item.slot] === item.id ? '当前版本' : '使用此版本'}
               </button>
             )}
           </article>
@@ -405,6 +586,29 @@ export function DeliveryPanel({
           <a href={preview.url} target="_blank" rel="noreferrer">
             在新页面查看预览
           </a>
+          <section className="delivery-checks" aria-label="预览确定性检查">
+            <header>
+              <div>
+                <strong>固定预览检查</strong>
+                <small>
+                  {preview.theme ?? '基础主题'} · {preview.layout ?? 'gallery'}
+                </small>
+              </div>
+              <span>
+                {preview.checks?.every((check) => check.status === 'pass')
+                  ? '硬性检查通过'
+                  : '等待检查'}
+              </span>
+            </header>
+            {preview.checks?.map((check) => (
+              <p key={check.id}>
+                <i className={check.status === 'pass' ? 'pass' : ''} />
+                <strong>{check.label}</strong>
+                <small>{check.detail}</small>
+              </p>
+            ))}
+            <footer>头像视觉一致性仍需用户查看实际画面确认。</footer>
+          </section>
           <details>
             <summary>将发布的 {preview.files.length} 个文件</summary>
             {preview.files.map((f) => (

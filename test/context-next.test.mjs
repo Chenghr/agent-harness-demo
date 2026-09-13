@@ -172,3 +172,27 @@ test("startup upgrades shipped tool contracts while retaining historical package
   assert.ok(h.catalog.getTool("history_search").parameters.properties.seq);
   assert.ok(h.catalog.library.package(item.id, previous)["tool.json"]);
 });
+test("startup upgrades bundled example Skills while retaining their prior package", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "skill-upgrade-"));
+  let h = new Harness({ root, speed: 0 });
+  t.after(async () => {
+    await h.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  const item = h.catalog.library.get("seed-skill-teacher-day-orchestrator"),
+    files = h.catalog.library.package(item.id);
+  files["SKILL.md"] = files["SKILL.md"].replace(
+    "每位成员使用一个独立图片助手",
+    "旧版双人图片工作包",
+  );
+  item.version = h.catalog.library.repo.savePackage(files);
+  h.catalog.library.repo.put("items", item.id, item);
+  h.catalog.library.repo.put("versions", `${item.id}@${item.version}`, item);
+  const previous = item.version;
+  await h.close();
+  h = new Harness({ root, speed: 0 });
+  const current = h.catalog.library.get(item.id);
+  assert.notEqual(current.version, previous);
+  assert.match(h.catalog.library.package(item.id)["SKILL.md"], /每位成员使用一个独立图片助手/);
+  assert.match(h.catalog.library.package(item.id, previous)["SKILL.md"], /旧版双人图片工作包/);
+});

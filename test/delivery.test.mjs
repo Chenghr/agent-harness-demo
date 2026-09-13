@@ -10,11 +10,14 @@ import { createServer } from "../server/index.mjs";
 import { delay } from "../server/core.mjs";
 import { zipFiles } from "../server/delivery/zip.mjs";
 import { DeliveryConfig } from "../server/delivery/config.mjs";
+import { generateMusic, generateVideo } from "../server/delivery/providers.mjs";
 
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j2l8AAAAASUVORK5CYII=",
   "base64",
 );
+const mp3 = Buffer.concat([Buffer.from("ID3"), Buffer.alloc(48, 1)]);
+const mp4 = Buffer.concat([Buffer.alloc(4), Buffer.from("ftyp"), Buffer.from("isom"), Buffer.alloc(48)]);
 const model = {
   async complete({ signal }) {
     await delay(30000, signal);
@@ -224,7 +227,11 @@ test("changed authorization requires a fresh publish request and allows that new
 test("eight-member greeting preview validates omissions, character limits and current image versions", async (t) => {
   const { h, s, a } = setup(t);
   const names = ["王磊", ...Array.from({ length: 7 }, (_, i) => `成员${i + 2}`)];
-  h.delivery.requirements(s, { members: names, limits: { 王磊: 50 } });
+  h.delivery.requirements(s, {
+    members: names,
+    limits: { 王磊: 50 },
+    presentation: { title: "教师节快乐", subtitle: "八个人，一份共同的感谢" },
+  });
   const members = [];
   for (const name of names)
     members.push({
@@ -233,6 +240,10 @@ test("eight-member greeting preview validates omissions, character limits and cu
       imageId: (await generate(h, s, a, name)).id,
     });
   await h.invoke(s, a, "tool_load", { name: "greeting_site" });
+  await assert.rejects(
+    h.invoke(s, a, "greeting_site", { title: "错误标题", members }),
+    { code: "CHECKS_FAILED" },
+  );
   await assert.rejects(
     h.invoke(s, a, "greeting_site", { title: "教师节快乐", members: members.slice(1) }),
     { code: "CHECKS_FAILED" },
@@ -244,11 +255,51 @@ test("eight-member greeting preview validates omissions, character limits and cu
     }),
     { code: "CHECKS_FAILED" },
   );
-  const result = await h.invoke(s, a, "greeting_site", { title: "教师节快乐", members });
+  const result = await h.invoke(s, a, "greeting_site", {
+    title: "教师节快乐",
+    subtitle: "八个人，一份共同的感谢",
+    intro: "谢谢您把耐心、方法与勇气留在我们的成长里。",
+    sectionTitle: "八封写给导师的信",
+    highlights: [
+      { title: "工作上手", text: "找到节奏" },
+      { title: "专业成长", text: "建立判断" },
+    ],
+    journey: [
+      { title: "初见", text: "新的起点" },
+      { title: "同行", text: "共同成长" },
+    ],
+    closingTitle: "新程有您，步履更坚定",
+    closing: "感谢您以经验为灯，也以关怀为伴。",
+    theme: "paper-garden",
+    layout: "gallery",
+    motion: "gentle",
+    members: members.map((member) => ({ ...member, keyword: "成长" })),
+  });
   const html = h.delivery.previewFile(s, result.id, "index.html").bytes.toString();
   assert.equal((html.match(/<article>/g) ?? []).length, 8);
   for (const name of names) assert.ok(html.includes(name));
+  assert.match(html, /八个人，一份共同的感谢/);
+  assert.match(html, /成长的四个切面/);
+  assert.match(html, /新程有您，步履更坚定/);
+  assert.match(html, /写给导师的话/);
+  assert.match(html, /prefers-reduced-motion/);
+  assert.equal(result.theme, "paper-garden");
+  assert.ok(result.checks.every((check) => check.status === "pass"));
   assert.equal(result.files.length, 9);
+
+  const child = s.agents[
+    h.spawnAgent(s, a, {
+      goal: "独立检查教师节预览",
+      previews: [result.id],
+      mode: "background",
+    }).agentId
+  ];
+  await h.invoke(s, child, "tool_load", { name: "greeting_review" });
+  const review = await h.invoke(s, child, "greeting_review", { previewId: result.id });
+  assert.equal(review.verdict, "needs_user_review");
+  assert.equal(review.deterministicChecksPassed, true);
+  assert.equal(review.checks.find((check) => check.id === "visual").status, "pending");
+
   const request = h.delivery.requestPublish(s, a, result.id);
   const newer = await generate(h, s, a, "王磊");
   h.delivery.select(s, newer.id);
@@ -403,6 +454,294 @@ test("DashScope multimodal image adapter sends native payload and stores the ret
   assert.equal(payload.parameters.prompt_extend, true);
   assert.equal(requests[1].url, "https://result.oss-cn-beijing.aliyuncs.com/generated.png");
   assert.equal(asset.mime, "image/png");
+});
+
+test("DashScope music and async video adapters use native payloads, poll one task and download trusted results", async () => {
+  const calls = [];
+  let polls = 0;
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url, ...init });
+    if (url.endsWith("/audio/music/generation"))
+      return Response.json({
+        output: { audio: { id: "music-1", url: "http://music.oss-cn-beijing.aliyuncs.com/result.mp3" } },
+        usage: { duration: 95 },
+      });
+    if (url.endsWith("/video-generation/video-synthesis"))
+      return Response.json({ output: { task_id: "video-task-1", task_status: "PENDING" } });
+    if (url.endsWith("/api/v1/tasks/video-task-1")) {
+      polls++;
+      return Response.json(
+        polls === 1
+          ? { output: { task_id: "video-task-1", task_status: "RUNNING" } }
+          : {
+              output: {
+                task_id: "video-task-1",
+                task_status: "SUCCEEDED",
+                video_url: "https://video.oss-cn-beijing.aliyuncs.com/result.mp4",
+              },
+            },
+      );
+    }
+    if (url.includes("result.mp3")) return new Response(mp3);
+    if (url.includes("result.mp4")) return new Response(mp4);
+    throw new Error(`unexpected fixture URL ${url}`);
+  };
+  const musicProfile = {
+    baseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/music/generation",
+    model: "fun-music-v1",
+    apiKey: "fixture-secret",
+    format: "mp3",
+  };
+  const videoProfile = {
+    baseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+    model: "wan3.0-video-prime",
+    apiKey: "fixture-secret",
+    resolution: "720P",
+    ratio: "16:9",
+    duration: 10,
+  };
+  const music = await generateMusic(musicProfile, "温暖克制的纯器乐", new AbortController().signal, fetcher);
+  let submitted;
+  const video = await generateVideo(
+    videoProfile,
+    "纸艺花园中的发光种子成长",
+    new AbortController().signal,
+    fetcher,
+    { pollMs: 1, onSubmitted: (id) => (submitted = id) },
+  );
+  assert.deepEqual(music.bytes, mp3);
+  assert.equal(music.mime, "audio/mpeg");
+  assert.equal(music.duration, 95);
+  assert.deepEqual(video.bytes, mp4);
+  assert.equal(video.mime, "video/mp4");
+  assert.equal(submitted, "video-task-1");
+  assert.equal(calls.filter((call) => call.method === "POST" && call.url.includes("video-synthesis")).length, 1);
+  const musicBody = JSON.parse(calls.find((call) => call.url.endsWith("/audio/music/generation")).body);
+  assert.equal(musicBody.input.is_instrumental, true);
+  const videoCall = calls.find((call) => call.url.endsWith("/video-generation/video-synthesis"));
+  const videoBody = JSON.parse(videoCall.body);
+  assert.equal(videoCall.headers["X-DashScope-Async"], "enable");
+  assert.deepEqual(videoBody.parameters, {
+    resolution: "720P",
+    ratio: "16:9",
+    duration: 10,
+    audio: false,
+    prompt_extend: true,
+    watermark: false,
+  });
+});
+
+test("TokenHub MiniMax music adapter requests instrumental URL output and downloads it", async () => {
+  const calls = [];
+  const fetcher = async (url, init = {}) => {
+    calls.push({ url, ...init });
+    if (url.endsWith("/minimax-music/generation"))
+      return Response.json({
+        data: { audio: "https://music.tencentcloudapi.com/result.mp3", status: 2 },
+        trace_id: "trace-music-1",
+        extra_info: { music_duration: 60000 },
+      });
+    if (url.endsWith("result.mp3")) return new Response(mp3);
+    throw new Error(`unexpected fixture URL ${url}`);
+  };
+  const profile = {
+    baseUrl: "https://tokenhub.tencentmaas.com/v1/wand/minimax-music/generation",
+    model: "minimax-music-v3.0",
+    protocol: "tokenhub-minimax-music",
+    apiKey: "fixture-secret",
+    format: "mp3",
+  };
+  const music = await generateMusic(profile, "温暖克制的纯器乐", new AbortController().signal, fetcher);
+  const body = JSON.parse(calls[0].body);
+  assert.equal(body.model, "minimax-music-v3.0");
+  assert.equal(body.prompt, "温暖克制的纯器乐");
+  assert.equal(body.lyrics_optimizer, false);
+  assert.equal(body.is_instrumental, true);
+  assert.equal(body.output_format, "url");
+  assert.equal(body.audio_setting.format, "mp3");
+  assert.equal(music.providerAssetId, "trace-music-1");
+  assert.equal(music.duration, 60);
+  assert.deepEqual(music.bytes, mp3);
+});
+
+test("TokenHub MiniMax music adapter accepts documented hex audio fallback", async () => {
+  const profile = {
+    baseUrl: "https://tokenhub.tencentmaas.com/v1/wand/minimax-music/generation",
+    model: "minimax-music-v3.0",
+    protocol: "tokenhub-minimax-music",
+    apiKey: "fixture-secret",
+    format: "mp3",
+  };
+  const music = await generateMusic(
+    profile,
+    "温暖克制的纯器乐",
+    new AbortController().signal,
+    async () =>
+      Response.json({
+        data: { audio: mp3.toString("hex"), status: 2 },
+        trace_id: "trace-music-hex",
+        base_resp: { status_code: 0, status_msg: "success" },
+      }),
+  );
+  assert.equal(music.providerAssetId, "trace-music-hex");
+  assert.deepEqual(music.bytes, mp3);
+});
+
+test("media versions are local, explicitly assigned, and rendered into a checked greeting preview", async (t) => {
+  let taskPoll = 0;
+  const { h, s, a } = setup(t, {
+    fetcher: async (url) => {
+      if (url.endsWith("/audio/music/generation"))
+        return Response.json({ output: { audio: { url: "https://result.oss-cn-beijing.aliyuncs.com/music.mp3" } } });
+      if (url.endsWith("/video-generation/video-synthesis"))
+        return Response.json({ output: { task_id: "task-media-1", task_status: "PENDING" } });
+      if (url.endsWith("/api/v1/tasks/task-media-1")) {
+        taskPoll++;
+        return Response.json({
+          output: {
+            task_status: "SUCCEEDED",
+            video_url: "https://result.oss-cn-beijing.aliyuncs.com/video.mp4",
+          },
+        });
+      }
+      if (url.endsWith("music.mp3")) return new Response(mp3);
+      if (url.endsWith("video.mp4")) return new Response(mp4);
+      if (url.endsWith("/images/generations"))
+        return Response.json({ data: [{ b64_json: png.toString("base64") }] });
+      throw new Error(`unexpected fixture URL ${url}`);
+    },
+  });
+  h.delivery.config.save("music", {
+    name: "Music fixture",
+    baseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/audio/music/generation",
+    model: "fun-music-v1",
+    apiKey: "fixture-secret",
+  });
+  h.delivery.config.save("video", {
+    name: "Video fixture",
+    baseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+    model: "wan3.0-video-prime",
+    apiKey: "fixture-secret",
+  });
+  await h.invoke(s, a, "tool_load", { name: "music_generate" });
+  await h.invoke(s, a, "tool_load", { name: "video_generate" });
+  const music = await h.invoke(s, a, "music_generate", { key: "网站背景音乐", prompt: "温暖纯器乐" });
+  const video = await h.invoke(s, a, "video_generate", { key: "导师感谢短片", prompt: "纸艺花园成长短片" });
+  const portrait = await generate(h, s, a, "新人");
+  assert.equal(taskPoll, 1);
+  assert.deepEqual(h.delivery.mediaBytes(s, music), mp3);
+  assert.deepEqual(h.delivery.mediaBytes(s, video), mp4);
+  const child = s.agents[
+    h.spawnAgent(s, a, {
+      goal: "搭站",
+      images: [portrait.id],
+      media: [music.id, video.id],
+    }).agentId
+  ];
+  assert.deepEqual(child.assignedMediaIds, [music.id, video.id]);
+  assert.equal(h.delivery.mediaAsset(s, music.id, child).id, music.id);
+  const sibling = s.agents[h.spawnAgent(s, a, { goal: "无媒体权限" }).agentId];
+  assert.throws(() => h.delivery.mediaAsset(s, music.id, sibling), { code: "PATH_DENIED" });
+  h.delivery.requirements(s, {
+    members: ["新人"],
+    media: { music: true, video: true },
+  });
+  await h.invoke(s, child, "tool_load", { name: "greeting_site" });
+  const preview = await h.invoke(s, child, "greeting_site", {
+    title: "感谢导师",
+    musicId: music.id,
+    videoId: video.id,
+    members: [{ name: "新人", blessing: "感谢您的指导与关心。", imageId: portrait.id }],
+  });
+  assert.equal(preview.files.length, 4);
+  assert.equal(preview.media.length, 2);
+  const html = h.delivery.previewFile(s, preview.id, "index.html").bytes.toString();
+  assert.match(html, /<audio id="background-music"/);
+  assert.match(html, /<video id="thanks-video"/);
+  assert.doesNotMatch(html, /autoplay/);
+  assert.equal(h.delivery.reviewGreeting(s, a, preview.id).deterministicChecksPassed, true);
+});
+
+test("cancelled video polling preserves its external task ID and never submits a second paid task", async (t) => {
+  let posts = 0,
+    polling = false;
+  const { h, s, a } = setup(t, {
+    fetcher: async (url, init = {}) => {
+      if (url.endsWith("/video-generation/video-synthesis")) {
+        posts++;
+        return Response.json({ output: { task_id: "paid-task-1", task_status: "PENDING" } });
+      }
+      if (url.endsWith("/api/v1/tasks/paid-task-1")) {
+        polling = true;
+        await delay(30000, init.signal);
+      }
+      throw new Error("unexpected request");
+    },
+  });
+  h.delivery.config.save("video", {
+    name: "Video fixture",
+    baseUrl: "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+    model: "wan3.0-video-prime",
+    apiKey: "fixture-secret",
+  });
+  await h.invoke(s, a, "tool_load", { name: "video_generate" });
+  const controller = new AbortController();
+  const pending = h.invoke(
+    s,
+    a,
+    "video_generate",
+    { key: "导师感谢短片", prompt: "纸艺花园成长短片" },
+    { signal: controller.signal },
+  );
+  await until(() => polling);
+  controller.abort();
+  await assert.rejects(pending);
+  const record = h.delivery.state(s).media.at(-1);
+  assert.equal(record.externalTaskId, "paid-task-1");
+  assert.equal(record.status, "unknown");
+  assert.equal(posts, 1);
+});
+
+test("image generation retries transient throttling and records the recovery", async (t) => {
+  let attempts = 0;
+  const { h, s, a, image } = setup(t, {
+    imageRetryBaseMs: 1,
+    fetcher: async (url) => {
+      if (url.endsWith("/images/generations")) {
+        attempts++;
+        if (attempts < 3) return new Response("busy", { status: 429 });
+        return Response.json({ data: [{ b64_json: png.toString("base64") }] });
+      }
+      return new Response(png);
+    },
+  });
+  h.delivery.config.save("image", { ...image, maxConcurrency: 2 });
+  const asset = await generate(h, s, a, "限流恢复成员");
+  assert.equal(attempts, 3);
+  assert.equal(asset.retryCount, 2);
+  assert.equal(asset.status, "ready");
+});
+
+test("one image provider enforces its configured concurrency bound", async (t) => {
+  let active = 0,
+    peak = 0;
+  const { h, s, a, image } = setup(t, {
+    fetcher: async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await delay(15);
+      active--;
+      return Response.json({ data: [{ b64_json: png.toString("base64") }] });
+    },
+  });
+  h.delivery.config.save("image", { ...image, maxConcurrency: 2 });
+  await h.invoke(s, a, "tool_load", { name: "image_generate" });
+  await Promise.all(
+    ["甲", "乙", "丙", "丁"].map((key) =>
+      h.invoke(s, a, "image_generate", { key, prompt: "统一纸艺风格的虚构角色" }),
+    ),
+  );
+  assert.equal(peak, 2);
 });
 
 test("a child's image model switch pins the current request and affects only its next generation", async (t) => {

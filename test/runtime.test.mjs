@@ -253,6 +253,25 @@ test("successive steering uses only the latest user direction", async (t) => {
   assert.equal(s.readOnly, true);
   assert.equal(count, 2);
 });
+test("reading one file does not accidentally make the whole session read-only", (t) => {
+  const h = setup(t),
+    task = h.create({
+      autoStart: false,
+      scenario: "custom",
+      prompt: "现在只读取 members.json，暂时不要出图，等待下一条消息。",
+    }),
+    s = h.get(task.id);
+  assert.equal(s.readOnly, false);
+
+  h.message(s.id, "下一步只读取成员名单并核对八人", "append");
+  assert.equal(s.readOnly, false);
+
+  h.message(s.id, "先不要修改文件，只给分析", "append");
+  assert.equal(s.readOnly, true);
+
+  h.message(s.id, "现在允许修改并生成任务成果", "append");
+  assert.equal(s.readOnly, false);
+});
 test(
   "stopping a parent cancels background processes and rejects new descendants",
   { timeout: 15000 },
@@ -351,6 +370,110 @@ test("failed handoff does not replace original context or model", async (t) => {
 test("unconfigured real model is rejected, never silently simulated", (t) => {
   const h = setup(t, { env: {} });
   assert.throws(() => h.create({ model: "api-primary" }), { code: "MODEL_UNCONFIGURED" });
+});
+test("teacher-day preset requires real capabilities and prepares its complete acceptance input", async (t) => {
+  const h = setup(t, { env: {} });
+  assert.throws(() => h.create({ scenario: "teacher-day", autoStart: false }), {
+    code: "MODEL_REQUIRED",
+  });
+  const provider = h.models.settings.saveProvider({
+    name: "Teacher fixture",
+    baseUrl: "https://model.example.test/v1",
+    protocol: "chat-completions",
+    apiKey: "fixture-secret",
+  });
+  const profile = h.models.settings.saveModel({
+    providerId: provider.id,
+    modelName: "teacher-fixture",
+    label: "Teacher fixture",
+    contextWindow: 32000,
+    maxOutput: 4000,
+    tools: true,
+  });
+  assert.throws(
+    () => h.create({ scenario: "teacher-day", model: profile.id, autoStart: false }),
+    { code: "DELIVERY_CONFIG" },
+  );
+  h.delivery.config.save("image", {
+    name: "Image fixture",
+    baseUrl: "https://image.example.test/v1",
+    model: "image-fixture",
+    protocol: "gpt-image",
+    apiKey: "fixture-secret",
+    maxConcurrency: 2,
+  });
+  h.delivery.config.save("music", {
+    name: "Music fixture",
+    baseUrl: "https://workspace.example.test/api/v1/services/audio/music/generation",
+    model: "fun-music-v1",
+    apiKey: "fixture-secret",
+  });
+  h.delivery.config.save("video", {
+    name: "Video fixture",
+    baseUrl: "https://workspace.example.test/api/v1/services/aigc/video-generation/video-synthesis",
+    model: "wan3.0-video-prime",
+    apiKey: "fixture-secret",
+  });
+  const snapshot = h.create({ scenario: "teacher-day", model: profile.id, autoStart: false });
+  const session = h.get(snapshot.id);
+  assert.equal(session.readOnly, false);
+  assert.deepEqual(h.delivery.state(session).requirements.members, [
+    "周雨宸",
+    "韩舒羽",
+    "程浩然",
+    "沈希扬",
+    "王子康",
+    "时泽润",
+    "汤其政",
+    "王默涵",
+  ]);
+  assert.deepEqual(h.delivery.state(session).requirements.limits, {});
+  assert.deepEqual(h.delivery.state(session).requirements.media, { music: true, video: true });
+  assert.deepEqual(h.delivery.state(session).requirements.genders, {
+    周雨宸: "female",
+    韩舒羽: "female",
+    程浩然: "male",
+    沈希扬: "male",
+    王子康: "male",
+    时泽润: "male",
+    汤其政: "male",
+    王默涵: "male",
+  });
+  assert.equal(
+    h.delivery.state(session).requirements.presentation.title,
+    "小艺新程 · 师恩相伴",
+  );
+  assert.match(
+    h.delivery.state(session).requirements.presentation.subtitle,
+    /感谢导师在工作上的悉心指导，也感谢生活中的关心与陪伴/,
+  );
+  assert.equal(JSON.parse(fs.readFileSync(path.join(session.workspace, "members.json"))).length, 8);
+  assert.ok(
+    JSON.parse(fs.readFileSync(path.join(session.workspace, "members.json"))).every(
+      (member) => [...member.blessing].length > 100,
+    ),
+  );
+  assert.ok(session.userRequirements[0].length < 100);
+  assert.match(session.userRequirements[0], /我们是八位刚加入小艺团队的新人/);
+  assert.doesNotMatch(session.userRequirements[0], /Skill|固定预览|独立检查/);
+  assert.equal(
+    h.config().scenarios.find((scenario) => scenario.id === "teacher-day").cardName,
+    "教师节感谢网站一键制作",
+  );
+  assert.equal(session.title, "小艺新程 · 师恩相伴");
+  assert.deepEqual(session.agents.main.loadedSkills, ["teacher-day-orchestrator"]);
+  assert.match(
+    session.agents.main.skillSnapshots["teacher-day-orchestrator"].content,
+    /每位成员使用一个独立图片助手/,
+  );
+  h.capabilityLoader.load(session, session.agents.main, "tool", "image_generate");
+  await assert.rejects(
+    h.invoke(session, session.agents.main, "image_generate", {
+      key: "周雨宸",
+      prompt: "纯原创虚构纸艺角色，年轻成年男性，背景干净留白。",
+    }),
+    { code: "CHECKS_FAILED" },
+  );
 });
 test("model switch invalidates a compaction started against the old context", async (t) => {
   const h = setup(t),

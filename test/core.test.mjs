@@ -67,6 +67,19 @@ test("catalog supports 1000+ independently named tools and loadable skill files"
     assert.ok(skill.content.includes("name: " + name));
   }
   assert.ok(catalog.search("测试", "skill").items.length > 0);
+  const teacher = catalog.getSkill("teacher-day-orchestrator");
+  assert.equal(teacher.category, "教师节数字展馆");
+  assert.ok(teacher.resources.includes("references/workflow.md"));
+  assert.match(teacher.content, /每位成员使用一个独立图片助手/);
+  for (const name of [
+    "blessing-copy-editor",
+    "portrait-art-director",
+    "greeting-site-builder",
+    "delivery-qa-reviewer",
+    "mentor-music-director",
+    "mentor-video-storyboard",
+  ])
+    assert.ok(catalog.getSkill(name).content.includes(`name: ${name}`));
 });
 test("event sequence continues beyond 2000 records after reopening store", (t) => {
   const root = directory(t);

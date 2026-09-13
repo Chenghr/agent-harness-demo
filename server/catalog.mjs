@@ -175,7 +175,7 @@ export const CORE_TOOLS = [
   tool(
     "agent_spawn",
     "创建子助手",
-    "创建子助手。默认通用助手，可接临时任务；只分配独立且值得分工的工作。files/artifacts/images 明确提供文件、产物、图片版本，未提供则不自动共享。后台立即返回编号；前台等待结果。",
+    "创建子助手。默认通用助手，可接临时任务；只分配独立且值得分工的工作。files/artifacts/images/media 明确提供文件、产物、图片和音视频版本，未提供则不自动共享。后台立即返回编号；前台等待结果。",
     schema(
       {
         goal: str("子任务目标", 2000),
@@ -183,6 +183,12 @@ export const CORE_TOOLS = [
         files: { type: "array", items: str("分配的工作目录相对文件路径", 500) },
         artifacts: { type: "array", items: str("分配的产物编号", 100) },
         images: { type: "array", maxItems: 40, items: str("明确分配的图片版本 ID", 100) },
+        media: { type: "array", maxItems: 20, items: str("明确分配的音视频版本 ID", 100) },
+        previews: {
+          type: "array",
+          maxItems: 20,
+          items: str("明确分配给检查助手的固定预览 ID", 100),
+        },
         background: str("必要背景", 3000),
         expectedOutput: str("预期产出", 2000),
         reason: str("简短分工理由", 500),
@@ -311,6 +317,37 @@ const specialSkills = [
     untrusted: true,
   },
 ];
+const exampleSkills = [
+  ["privacy-boundary", "实体边界检查", "隐私实体数据集构建", []],
+  ["privacy-labels", "标签规范检查", "隐私实体数据集构建", []],
+  ["privacy-overlap", "重叠实体检查", "隐私实体数据集构建", []],
+  [
+    "teacher-day-orchestrator",
+    "小艺新人导师感谢网站编排",
+    "教师节数字展馆",
+    [
+      "references/workflow.md",
+      "references/recovery.md",
+      "references/xiaoyi-mentor-site.md",
+    ],
+  ],
+  ["blessing-copy-editor", "多人祝福文案编辑", "教师节数字展馆", []],
+  [
+    "portrait-art-director",
+    "原创头像视觉导演",
+    "教师节数字展馆",
+    ["references/paper-garden.md"],
+  ],
+  ["greeting-site-builder", "教师节数字展馆搭建", "教师节数字展馆", []],
+  ["mentor-music-director", "导师感谢背景音乐策划", "教师节数字展馆", []],
+  ["mentor-video-storyboard", "导师感谢短片分镜", "教师节数字展馆", []],
+  [
+    "delivery-qa-reviewer",
+    "数字展馆独立验收",
+    "教师节数字展馆",
+    ["references/checklist.md"],
+  ],
+];
 
 export class Catalog {
   constructor(root) {
@@ -350,24 +387,20 @@ export class Catalog {
           });
         }
     for (const command of configuredCommands(root)) this.tools.set(command.name, command);
-    for (const name of ["privacy-boundary", "privacy-labels", "privacy-overlap"]) {
+    for (const [name, title, category, resources] of exampleSkills) {
       const file = fileURLToPath(new URL(`../examples/skills/${name}/SKILL.md`, import.meta.url));
       const content = fs.readFileSync(file, "utf8");
       this.skills.set(name, {
         name,
-        title: {
-          "privacy-boundary": "实体边界检查",
-          "privacy-labels": "标签规范检查",
-          "privacy-overlap": "重叠实体检查",
-        }[name],
+        title,
         description: content.match(/description: (.+)/)[1],
-        category: "隐私实体数据集构建",
+        category,
         source: "bundled-example",
         version: "1",
         kind: "skill",
         simulated: false,
         file,
-        resources: [],
+        resources,
       });
     }
     initializeLibrary(this);

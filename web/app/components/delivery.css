@@ -72,6 +72,36 @@
   grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
   gap: 12px;
 }
+.delivery-media {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 24px;
+}
+.delivery-media article {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 420px) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line, #dce4d8);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.delivery-media article > div {
+  display: grid;
+  gap: 4px;
+}
+.delivery-media audio,
+.delivery-media video {
+  width: 100%;
+  max-height: 210px;
+  border-radius: 12px;
+}
+@media (max-width: 760px) {
+  .delivery-media article {
+    grid-template-columns: 1fr;
+  }
+}
 .delivery-images article {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -85,6 +115,62 @@
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 5px;
+}
+.delivery-retry {
+  color: #8a6a35 !important;
+}
+.delivery-checks {
+  display: grid;
+  gap: 8px;
+  padding: 15px;
+  border: 1px solid #d7e5da;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #fbfefb, #f4f8f3);
+}
+.delivery-checks header,
+.delivery-checks p {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+}
+.delivery-checks header {
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2ebe3;
+}
+.delivery-checks header div {
+  display: grid;
+  gap: 1px;
+}
+.delivery-checks header > span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #315f46;
+  background: #e4f2e7;
+  font-size: 11px;
+}
+.delivery-checks p i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #c9cec8;
+}
+.delivery-checks p i.pass {
+  background: #4c8a65;
+  box-shadow: 0 0 0 3px #4c8a6518;
+}
+.delivery-checks p strong {
+  font-size: 12px;
+}
+.delivery-checks p small {
+  margin-left: auto;
+  text-align: right;
+}
+.delivery-checks footer {
+  color: var(--muted-foreground);
+  font-size: 11px;
 }
 .publication-card {
   padding: 16px;

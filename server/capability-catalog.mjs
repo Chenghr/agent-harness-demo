@@ -54,6 +54,22 @@ export function initializeLibrary(catalog) {
             library.repo.put("items", id, next);
             library.repo.put("versions", `${id}@${next.version}`, next);
           }
+          if (kind === "skill" && item.source === "bundled-example") {
+            const files = Object.fromEntries([
+                ["SKILL.md", fs.readFileSync(item.file, "utf8")],
+                ...item.resources.map((relative) => [
+                  relative,
+                  fs.readFileSync(path.join(path.dirname(item.file), relative), "utf8"),
+                ]),
+              ]),
+              version = library.repo.savePackage(files);
+            if (version !== current.version) {
+              const next = { ...current, version };
+              next.scan = inspect(next, files);
+              library.repo.put("items", id, next);
+              library.repo.put("versions", `${id}@${version}`, next);
+            }
+          }
           continue;
         }
         const top = directory(

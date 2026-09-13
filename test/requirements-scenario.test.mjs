@@ -376,7 +376,14 @@ test("BASE: image and preview tools are registered, but publication approval is 
       return answer("页面已准备，请检查");
     },
   });
-  for (const tool of ["image_generate", "greeting_site", "site_preview", "site_request_publish"])
+  for (const tool of [
+    "image_generate",
+    "music_generate",
+    "video_generate",
+    "greeting_site",
+    "site_preview",
+    "site_request_publish",
+  ])
     assert.ok(h.catalog.tools.has(tool));
   assert.ok(!h.catalog.tools.has("site_approve_publish"));
   h.launch(s, a);

@@ -17,6 +17,8 @@ export function createSupervisor(h, s) {
       prepare(parent, child, request) {
         h.subagentWorkspace.prepare(s, parent, child, request);
         const images = h.delivery.assign(s, parent, child, request.images ?? []);
+        const media = h.delivery.assignMedia(s, parent, child, request.media ?? []);
+        const previews = h.delivery.assignPreviews(s, parent, child, request.previews ?? []);
         h.context.add(s, child, [
           {
             role: "user",
@@ -26,6 +28,8 @@ export function createSupervisor(h, s) {
               expectedOutput: child.delegation.expectedOutput,
               materials: child.delegation.materials,
               images,
+              media,
+              previews,
             }),
           },
         ]);

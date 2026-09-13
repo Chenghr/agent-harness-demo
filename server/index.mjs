@@ -20,6 +20,10 @@ const mime = {
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
   ".txt": "text/plain; charset=utf-8",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
 };
 function send(res, status, value) {
   res.writeHead(status, {
@@ -68,10 +72,27 @@ export function createServer({
       if (req.method === "GET" && url.pathname.startsWith("/preview/")) {
         const [, , sid, previewId, ...rest] = url.pathname.split("/").map(decodeURIComponent);
         const file = harness.delivery.previewFile(harness.get(sid), previewId, rest.join("/"));
-        res.writeHead(200, { "Content-Type": file.mime, "Cache-Control": "no-store",
+        const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+        let start = 0,
+          end = file.bytes.length - 1,
+          status = 200;
+        if (range) {
+          start = range[1] ? Number(range[1]) : 0;
+          end = range[2] ? Number(range[2]) : end;
+          if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || start >= file.bytes.length) {
+            res.writeHead(416, { "Content-Range": `bytes */${file.bytes.length}` });
+            res.end(); return;
+          }
+          end = Math.min(end, file.bytes.length - 1);
+          status = 206;
+        }
+        const body = file.bytes.subarray(start, end + 1);
+        res.writeHead(status, { "Content-Type": file.mime, "Cache-Control": "no-store",
+          "Accept-Ranges": "bytes", "Content-Length": body.length,
+          ...(status === 206 ? { "Content-Range": `bytes ${start}-${end}/${file.bytes.length}` } : {}),
           "X-Frame-Options": "SAMEORIGIN",
-          "Content-Security-Policy": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'" });
-        res.end(file.bytes); return;
+          "Content-Security-Policy": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'" });
+        res.end(body); return;
       }
       if (url.pathname.startsWith("/api/")) {
         const parts = url.pathname.slice(5).split("/").filter(Boolean).map(decodeURIComponent);
@@ -132,6 +153,16 @@ export function createServer({
               const asset = harness.delivery.asset(session, parts[4]);
               res.writeHead(200, { "Content-Type": asset.mime, "Cache-Control": "private, max-age=3600" });
               res.end(harness.delivery.imageBytes(session, asset)); return;
+            }
+            if (method === "GET" && parts[3] === "media") {
+              const item = harness.delivery.mediaAsset(session, parts[4]);
+              res.writeHead(200, {
+                "Content-Type": item.mime,
+                "Content-Length": item.bytes,
+                "Cache-Control": "private, max-age=3600",
+                "Accept-Ranges": "bytes",
+              });
+              res.end(harness.delivery.mediaBytes(session, item)); return;
             }
             return send(res, 200, await deliveryRoute(harness, session, parts, method, () => readBody(req)));
           }
