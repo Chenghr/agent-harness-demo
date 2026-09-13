@@ -85,6 +85,16 @@
   max-height: min(620px, calc(100dvh - 120px));
   overflow: hidden;
 }
+.pet-web-positioning .pet-panel {
+  position: fixed;
+  right: 10px;
+  bottom: 154px;
+  z-index: 46;
+}
+.pet-web-positioning .pet-panel.pet-panel-positioned {
+  right: auto;
+  bottom: auto;
+}
 .pet-panel header {
   display: flex;
   justify-content: space-between;
@@ -298,6 +308,24 @@
 .companion-standalone .pet-panel {
   width: 100%;
   max-height: calc(100dvh - 160px);
+}
+.companion-standalone.pet-web-positioning {
+  position: fixed;
+  width: auto;
+  min-height: 0;
+  display: block;
+  flex: none;
+  padding-bottom: 22px;
+}
+.companion-standalone.pet-web-positioning .pet-panel {
+  width: min(376px, calc(100vw - 20px));
+  max-height: min(620px, calc(100dvh - 20px));
+}
+.pet-web-positioning .pet-dock {
+  min-width: 240px;
+}
+.companion:not(.companion-standalone).pet-web-positioning {
+  padding-bottom: 22px;
 }
 body:has(.pet-standalone-page) {
   background: transparent !important;

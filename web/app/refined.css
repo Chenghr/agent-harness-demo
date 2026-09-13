@@ -1178,6 +1178,9 @@ textarea:focus-visible {
 .companion:not(.companion-standalone) {
   right: 6px;
   bottom: 96px;
+}
+
+.companion:not(.companion-standalone) .pet-dock {
   transform: scale(0.72);
   transform-origin: right bottom;
 }
@@ -1336,7 +1339,13 @@ body:has(.inspector) .companion:not(.companion-standalone) {
   }
 
   .companion:not(.companion-standalone) {
-    display: none;
+    right: 0;
+    bottom: 108px;
+    display: block;
+  }
+
+  .companion:not(.companion-standalone) .pet-dock {
+    transform: scale(0.62);
   }
 }
 

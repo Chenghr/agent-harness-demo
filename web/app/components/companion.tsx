@@ -1,5 +1,11 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   X,
   Send,
@@ -175,9 +181,14 @@ function CompanionPanel({
     [eggComfort, setEggComfort] = useState(''),
     [slowComfort, setSlowComfort] = useState(''),
     [position, setPosition] = useState<PetPosition | null>(null),
-    [dragging, setDragging] = useState(false);
+    [dragging, setDragging] = useState(false),
+    [webPositioning, setWebPositioning] = useState(false),
+    [panelPosition, setPanelPosition] = useState<PetPosition | null>(null),
+    [steadyMood, setSteadyMood] = useState<PetMood | null>(null);
   const lifetime = useRef(new AbortController()),
     companionRef = useRef<HTMLDivElement>(null),
+    panelRef = useRef<HTMLElement>(null),
+    characterRef = useRef<HTMLButtonElement>(null),
     dragRef = useRef<{
       pointerId: number;
       startX: number;
@@ -189,12 +200,13 @@ function CompanionPanel({
     calloutTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     eggComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     slowComfortTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    steadyMoodTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
     eggCount = useRef(0),
     slowCount = useRef(0),
     uiState = useRef({ quiet, open });
   const positionStorageKey = standalone
-    ? 'yi-work-pet-position-standalone'
-    : 'yi-work-pet-position-workspace';
+    ? 'yi-work-pet-position-standalone-v2'
+    : 'yi-work-pet-position-workspace-v2';
   const clampPosition = useCallback((next: PetPosition): PetPosition => {
     const rect = companionRef.current?.getBoundingClientRect();
     const width = rect?.width ?? 104;
@@ -211,6 +223,43 @@ function CompanionPanel({
       ),
     };
   }, []);
+  useEffect(() => {
+    setWebPositioning(!hasNativeBridge());
+  }, []);
+  const placePanel = useCallback(() => {
+    const panel = panelRef.current;
+    const character = characterRef.current;
+    if (!panel || !character) return;
+    const panelRect = panel.getBoundingClientRect();
+    const petRect = character.getBoundingClientRect();
+    const margin = 10;
+    const gap = 10;
+    const maxX = Math.max(margin, window.innerWidth - panelRect.width - margin);
+    const maxY = Math.max(margin, window.innerHeight - panelRect.height - margin);
+    const x = Math.min(Math.max(margin, petRect.right - panelRect.width), maxX);
+    const above = petRect.top - panelRect.height - gap;
+    const below = petRect.bottom + gap;
+    const y =
+      above >= margin
+        ? above
+        : below + panelRect.height <= window.innerHeight - margin
+          ? below
+          : Math.min(Math.max(margin, above), maxY);
+    setPanelPosition({ x, y });
+  }, []);
+  useLayoutEffect(() => {
+    if (!open || !webPositioning) {
+      setPanelPosition(null);
+      return;
+    }
+    placePanel();
+  }, [open, position, webPositioning, placePanel]);
+  useEffect(() => {
+    if (!open || !webPositioning) return;
+    const update = () => placePanel();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [open, webPositioning, placePanel]);
   useEffect(() => {
     if (hasNativeBridge()) return;
     try {
@@ -286,6 +335,7 @@ function CompanionPanel({
       if (calloutTimer.current) clearTimeout(calloutTimer.current);
       if (eggComfortTimer.current) clearTimeout(eggComfortTimer.current);
       if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
+      if (steadyMoodTimer.current) clearTimeout(steadyMoodTimer.current);
     };
   }, []);
   const generation = useRef(0),
@@ -358,6 +408,16 @@ function CompanionPanel({
   }
   async function feedback(kind: string, quick = false) {
     let comfort = '';
+    if (quick) {
+      setSteadyMood(
+        state?.presence?.mood ?? fallbackMood(state?.progress.status),
+      );
+      if (steadyMoodTimer.current) clearTimeout(steadyMoodTimer.current);
+      steadyMoodTimer.current = setTimeout(() => setSteadyMood(null), 6500);
+    } else {
+      setSteadyMood(null);
+      if (steadyMoodTimer.current) clearTimeout(steadyMoodTimer.current);
+    }
     if (kind === 'egg') {
       setSlowComfort('');
       if (slowComfortTimer.current) clearTimeout(slowComfortTimer.current);
@@ -391,7 +451,7 @@ function CompanionPanel({
       }, 6500);
     }
     setReaction(kind);
-    setReactionTick((v) => v + 1);
+    if (!quick) setReactionTick((v) => v + 1);
     setNote(
       kind === 'slow'
         ? `催办已收到。${comfort}`
@@ -458,8 +518,9 @@ function CompanionPanel({
     }
   }
   const busy = sending || state?.busy;
-  const mood: PetMood =
-    reaction === 'up'
+  const mood: PetMood = steadyMood
+    ? steadyMood
+    : reaction === 'up'
       ? 'happy'
       : reaction === 'down' || reaction === 'egg'
         ? 'sad'
@@ -480,7 +541,7 @@ function CompanionPanel({
   return (
     <div
       ref={companionRef}
-      className={`companion ${standalone ? 'companion-standalone' : ''} ${dragging ? 'pet-dragging' : ''} pet-presence-${state?.presence?.activity ?? 'resting'} ${reaction ? `pet-reacting-${reaction}` : ''}`}
+      className={`companion ${standalone ? 'companion-standalone' : ''} ${webPositioning ? 'pet-web-positioning' : ''} ${dragging ? 'pet-dragging' : ''} pet-presence-${state?.presence?.activity ?? 'resting'} ${reaction ? `pet-reacting-${reaction}` : ''}`}
       style={
         position
           ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' }
@@ -492,7 +553,13 @@ function CompanionPanel({
     >
       {open && (
         <section
-          className={`pet-panel ${btwMode ? 'pet-panel-btw' : ''}`}
+          ref={panelRef}
+          className={`pet-panel ${panelPosition ? 'pet-panel-positioned' : ''} ${btwMode ? 'pet-panel-btw' : ''}`}
+          style={
+            webPositioning && panelPosition
+              ? { left: panelPosition.x, top: panelPosition.y }
+              : undefined
+          }
           aria-label={btwMode ? 'BTW 独立对话' : '小艺独立对话'}
         >
           <header>
@@ -514,6 +581,7 @@ function CompanionPanel({
                 aria-label="导出宠物对话与反馈"
                 title="导出对话与反馈"
                 onClick={exportData}
+                disabled={!sessionId}
               >
                 <Download size={15} />
               </button>
@@ -527,7 +595,7 @@ function CompanionPanel({
               >
                 <Minus size={16} />
               </button>
-              {standalone && (
+              {standalone && !webPositioning && (
                 <button
                   aria-label="退出小艺桌面宠物"
                   onClick={() => native('close')}
@@ -886,6 +954,7 @@ function CompanionPanel({
           </button>
         )}
         <button
+          ref={characterRef}
           className="pet-character"
           aria-label={open ? '小艺正在陪伴' : '打开小艺'}
           onClick={() => {
