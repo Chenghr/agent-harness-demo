@@ -168,6 +168,12 @@ export class DemoModel {
           "已收到你的任务。当前选用的是模拟模型，它只支持预设演示，不会理解并执行自由任务。请切换到已配置的真实模型继续，或新建一个演示任务。",
         ),
       ];
+    if (session.scenario === "capability")
+      return [
+        step(
+          "按需加载演示任务已就绪。当前活跃 Skill 为 0；请打开“运行详情 → 工具”，从能力目录检索并只加载本次需要的一项 Skill，演示结束后再卸载。",
+        ),
+      ];
     if (session.scenario === "scale") {
       const names = [
         "analytics__latency__mean",
@@ -266,7 +272,17 @@ export class DemoModel {
           call("run_diagnostic", { duration: 20000 }),
         ),
       );
-    if (session.scenario === "context" || session.scenario === "full")
+    if (session.scenario === "context")
+      plans.push(
+        step(
+          "生成足量、明确标注的诊断演示日志。原始输出保存在产物中，当前上下文保留一段较长预览。",
+          call("generate_logs", { lines: 520 }),
+        ),
+        step(
+          "压缩前材料已准备好。本演示不会自动压缩；请打开“运行详情 → 上下文”，记录当前占用后点击“手动压缩上下文”。",
+        ),
+      );
+    if (session.scenario === "full")
       plans.push(
         step(
           "生成明确标注的诊断演示日志。原始输出保存在产物中，不会随上下文压缩删除。",

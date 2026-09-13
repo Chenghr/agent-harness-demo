@@ -49,9 +49,17 @@ export const SCENARIOS = [
   {
     id: "context",
     name: "上下文与模型交接",
-    subtitle: "生成长日志，压缩后继续工作",
-    prompt: "分析购物车失败原因，生成详细日志并压缩上下文。不要修改测试文件，也先不要修改实现。",
+    subtitle: "生成长日志，等待手动压缩",
+    prompt: "分析购物车失败原因，生成详细日志供上下文压缩演示。不要自动压缩，等我点击“手动压缩上下文”。不要修改测试文件，也先不要修改实现。",
     icon: "layers",
+  },
+  {
+    id: "capability",
+    name: "Skill 按需加载",
+    subtitle: "千级目录 → 精确检索 → 加载与卸载",
+    prompt:
+      "创建一个 Skill 按需加载演示任务。暂时不要加载任何 Skill，等待我从能力目录手动选择。",
+    icon: "catalog",
   },
   {
     id: "security",

@@ -310,6 +310,7 @@ export class Harness extends EventEmitter {
           breakdown: built.breakdown,
           summary: a.summary,
           compactions: a.compactions,
+          compacting: a.compacting,
           historyUnits: a.history.length,
           lastCompaction: a.lastCompaction,
         },
@@ -863,7 +864,7 @@ export class Harness extends EventEmitter {
         simulated: true,
         lines: args.lines,
         artifactId: artifact.id,
-        preview: logs.slice(0, 1400),
+        preview: logs.slice(0, Math.floor(args.lines) >= 500 ? 6500 : 1400),
         note: "完整日志在产物中，未将全部输出注入上下文",
       };
     }

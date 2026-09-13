@@ -515,7 +515,7 @@ export function CapabilityManager() {
                   </button>
                   <span className="cap-tag">
                     {item.kind === 'directory'
-                      ? '目录'
+                      ? `目录 · ${item.count?.toLocaleString() ?? 0} 项`
                       : item.kind === 'skill'
                         ? 'Skill'
                         : '工具'}

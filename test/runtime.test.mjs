@@ -59,6 +59,42 @@ test(
     assert.equal(s.agents.main.completion.report.verdict, "pass");
   },
 );
+test("context handoff demo waits for one visible manual compaction", async (t) => {
+  const h = setup(t),
+    snap = h.create({ scenario: "context", model: "demo-balanced" }),
+    s = h.get(snap.id);
+  await waitFor(() => ["completed", "needs_review", "failed"].includes(s.status));
+  assert.notEqual(s.status, "failed");
+  assert.equal(s.agents.main.compactions, 0);
+  assert.equal(s.agents.main.summary, "");
+  const before = h.context.build(s, s.agents.main, h.models.get("demo-balanced")).tokens;
+  const result = await h.context.compact(s, s.agents.main, {
+    force: true,
+    allowClosing: true,
+    delayMs: 0,
+  });
+  const after = h.context.build(s, s.agents.main, h.models.get("demo-balanced")).tokens;
+  assert.equal(result.skipped, undefined);
+  assert.equal(s.agents.main.compactions, 1);
+  assert.ok(result.units > 0);
+  assert.ok(after < before);
+  assert.match(s.agents.main.summary, /artifact_read/);
+});
+test("capability demo starts empty and supports one targeted Skill load and unload", async (t) => {
+  const h = setup(t),
+    snap = h.create({ scenario: "capability", model: "demo-balanced" }),
+    s = h.get(snap.id),
+    a = s.agents.main;
+  await waitFor(() => ["completed", "needs_review", "failed"].includes(s.status));
+  assert.notEqual(s.status, "failed");
+  assert.deepEqual(a.loadedSkills, []);
+  const loaded = h.capabilityLoader.load(s, a, "skill", "commerce-volume-trend");
+  assert.equal(loaded.loaded, true);
+  assert.deepEqual(a.loadedSkills, ["commerce-volume-trend"]);
+  const unloaded = h.unload(s, a, "skill", "commerce-volume-trend");
+  assert.equal(unloaded.historyPreserved, true);
+  assert.deepEqual(a.loadedSkills, []);
+});
 test("security demonstration loads untrusted skill but denies its requested actions", async (t) => {
   const h = setup(t),
     snap = h.create({ scenario: "security" }),

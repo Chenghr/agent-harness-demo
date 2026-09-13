@@ -311,7 +311,10 @@ export function createServer({
               return send(
                 res,
                 200,
-                await harness.context.compact(session, session.agents.main, { force: true }),
+                await harness.context.compact(session, session.agents.main, {
+                  force: true,
+                  allowClosing: true,
+                }),
               );
             if (parts[2] === "load") {
               if (!["tool", "skill"].includes(body.kind))

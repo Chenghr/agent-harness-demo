@@ -157,6 +157,7 @@ export class ContextManager {
       delayMs = 120,
       profile = this.runtime.models.get(agent.model),
       detached = false,
+      allowClosing = false,
     } = {},
   ) {
     if (agent.compacting && !detached) return { skipped: true, reason: "压缩已经进行中" };
@@ -194,7 +195,7 @@ export class ContextManager {
         session.revision !== version ||
         agent.epoch !== epoch ||
         (agent.contextVersion ?? 0) !== contextVersion ||
-        session.closing
+        (session.closing && !allowClosing)
       ) {
         if (!detached)
           this.runtime.event(
@@ -235,7 +236,7 @@ export class ContextManager {
         session.revision !== version ||
         agent.epoch !== epoch ||
         (agent.contextVersion ?? 0) !== contextVersion ||
-        session.closing
+        (session.closing && !allowClosing)
       ) {
         if (!detached)
           this.runtime.event(
@@ -304,7 +305,9 @@ export class ContextManager {
   }
   async ensure(session, agent, profile, signal) {
     let input = this.build(session, agent, profile);
-    if (input.tokens > input.available * 0.75) {
+    const waitsForManualDemoCompaction =
+      session.scenario === "context" && profile.simulated;
+    if (!waitsForManualDemoCompaction && input.tokens > input.available * 0.75) {
       await this.compact(session, agent, { signal, profile });
       input = this.build(session, agent, profile);
     }

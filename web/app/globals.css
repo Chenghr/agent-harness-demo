@@ -1090,6 +1090,17 @@ button svg {
   width: 100%;
   font-size: 12px !important;
 }
+.context-notice {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dce8dc;
+  border-radius: 8px;
+  background: #f4f8f3;
+  color: #3f5d48;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .summary-preview {
   font-size: 12px;
   line-height: 1.9;

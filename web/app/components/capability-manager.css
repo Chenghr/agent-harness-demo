@@ -433,9 +433,18 @@
   align-items: center;
   justify-content: center;
   padding: 30px;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .cap-modal,
 .cap-detail {
+  /* An open native dialog is absolutely positioned by the user-agent.
+     Keep it in the overlay's flex layout so every capability modal is
+     centered against the viewport instead of the page's left edge. */
+  position: relative;
+  inset: auto;
+  margin: 0;
+  flex: 0 1 auto;
   background: white;
   border: 1px solid var(--cap-border);
   border-radius: 13px;

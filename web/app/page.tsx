@@ -122,7 +122,14 @@ type Agent = {
     breakdown?: Record<string, number>;
     summary: string;
     compactions: number;
+    compacting?: boolean;
     historyUnits: number;
+    lastCompaction?: {
+      before: number;
+      after: number;
+      reduced: number;
+      units: number;
+    };
   };
 };
 type Action = {
@@ -250,7 +257,15 @@ const activeStates = [
   'compacting',
   'cancelling',
 ];
-const icons = [Workflow, Pause, Layers, ShieldCheck, Activity];
+const scenarioIcons: Record<string, typeof Workflow> = {
+  dataset: FileText,
+  workflow: Workflow,
+  pause: Pause,
+  layers: Layers,
+  catalog: BookOpen,
+  shield: ShieldCheck,
+  activity: Activity,
+};
 const eventLabels: Record<string, string> = {
   'session.created': '任务已创建',
   'agent.started': 'Agent 开始执行',
@@ -320,9 +335,17 @@ const pretty = (v: unknown) =>
   typeof v === 'string' ? v : JSON.stringify(v, null, 2);
 const clock = (t: string) =>
   new Date(t).toLocaleTimeString('zh-CN', { hour12: false });
-function Status({ status, label }: { status: string; label?: string }) {
+function Status({
+  status,
+  label,
+  tone,
+}: {
+  status: string;
+  label?: string;
+  tone?: string;
+}) {
   return (
-    <span className={`status status-${status}`}>
+    <span className={`status status-${tone ?? status}`}>
       <span />
       {label ?? states[status] ?? status}
     </span>
@@ -388,6 +411,8 @@ export default function Home() {
   );
   const [streaming, setStreaming] = useState('');
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [compactingContext, setCompactingContext] = useState(false);
+  const [contextNotice, setContextNotice] = useState('');
   const [childDraft, setChildDraft] = useState('');
   const [childType, setChildType] = useState('general');
   const [childFiles, setChildFiles] = useState('');
@@ -455,9 +480,11 @@ export default function Home() {
     if (selected) refreshList().catch(fail);
   }, [sessionStatus, selected, refreshList]);
   useEffect(() => {
-    if (!selected) {
+    if (!selected)
       chatRef.current?.scrollTo({ top: 0, behavior: 'auto' });
-    } else if (autoScroll) {
+  }, [selected]);
+  useEffect(() => {
+    if (selected && autoScroll) {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [
@@ -495,6 +522,8 @@ export default function Home() {
     setStreaming('');
     setConnected(false);
     setAutoScroll(true);
+    setCompactingContext(false);
+    setContextNotice('');
     setSelected(id);
     setMessageTarget('main');
     if (id) localStorage.setItem('harness.selected-session', id);
@@ -549,6 +578,40 @@ export default function Home() {
       await api(`/sessions/${selected}/${route}`, body);
     } catch (e) {
       fail(e);
+    }
+  }
+  async function compactContext() {
+    if (!selected || compactingContext || active) return;
+    setCompactingContext(true);
+    setContextNotice('正在整理较早的完整交互，并保留原始记录入口…');
+    setError('');
+    const started = Date.now();
+    try {
+      const result = await api<{
+        skipped?: boolean;
+        discarded?: boolean;
+        reason?: string;
+        before?: number;
+        after?: number;
+        reduced?: number;
+        units?: number;
+      }>(`/sessions/${selected}/compact`, {});
+      if (result.skipped || result.discarded) {
+        setContextNotice(`本次未压缩：${result.reason ?? '任务状态在压缩期间发生变化'}`);
+      } else {
+        setContextNotice(
+          `压缩完成 · ${result.before?.toLocaleString()} → ${result.after?.toLocaleString()} tokens · 归档 ${result.units ?? 0} 个历史单元`,
+        );
+      }
+      setSession(await api<Session>(`/sessions/${selected}`));
+      const remaining = 500 - (Date.now() - started);
+      if (remaining > 0)
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+    } catch (e) {
+      fail(e);
+      setContextNotice('压缩失败，请查看页面顶部的错误提示。');
+    } finally {
+      setCompactingContext(false);
     }
   }
   async function changeModel(value: string | null) {
@@ -811,6 +874,7 @@ export default function Home() {
               ref={chatRef}
               className="chat-scroll"
               onScroll={(e) => {
+                if (!selected) return;
                 const el = e.currentTarget;
                 setAutoScroll(
                   el.scrollHeight - el.scrollTop - el.clientHeight < 120,
@@ -837,7 +901,7 @@ export default function Home() {
                   {examplesOpen && (
                     <div className="scenario-grid">
                       {config?.scenarios.map((s, i) => {
-                        const Icon = icons[i] ?? Workflow;
+                        const Icon = scenarioIcons[s.icon] ?? Workflow;
                         return (
                           <button
                             key={s.id}
@@ -1025,7 +1089,7 @@ export default function Home() {
               )}
               <div ref={endRef} />
             </div>
-            {!autoScroll && (
+            {selected && !autoScroll && (
               <button
                 className="scroll-latest"
                 onClick={() => {
@@ -1336,7 +1400,12 @@ export default function Home() {
                                 status={a.status}
                                 label={
                                   a.parentId && a.status === 'needs_review'
-                                    ? '待核实'
+                                    ? '已结束 · 结果待核实'
+                                    : undefined
+                                }
+                                tone={
+                                  a.parentId && a.status === 'needs_review'
+                                    ? 'completed'
                                     : undefined
                                 }
                               />
@@ -1362,6 +1431,9 @@ export default function Home() {
                                     ? '等待结果'
                                     : '后台执行'}
                                 </span>
+                              )}
+                              {a.parentId && a.status === 'needs_review' && (
+                                <span>结果已返回父任务</span>
                               )}
                             </div>
                             {a.delegation && (
@@ -1795,12 +1867,25 @@ export default function Home() {
                   <Button
                     variant="outline"
                     className="full-width"
-                    disabled={!session}
-                    onClick={() => command('compact')}
+                    disabled={!session || active || compactingContext || context?.compacting}
+                    onClick={() => void compactContext()}
                   >
-                    <Layers size={15} />
-                    手动压缩上下文
+                    {compactingContext || context?.compacting ? (
+                      <LoaderCircle className="spin" size={15} />
+                    ) : (
+                      <Layers size={15} />
+                    )}
+                    {active
+                      ? '等待压缩前材料准备完成'
+                      : compactingContext || context?.compacting
+                        ? '正在压缩上下文…'
+                        : '手动压缩上下文'}
                   </Button>
+                  {contextNotice && (
+                    <output className="context-notice" aria-live="polite">
+                      {contextNotice}
+                    </output>
+                  )}
                   <div className="panel-label spaced">历史摘要</div>
                   <pre className="summary-preview">
                     {context?.summary ||
